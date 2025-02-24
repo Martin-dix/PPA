@@ -1,9 +1,10 @@
-// Global variables for map, markers, layers, and state
+// Global variables
 let map, transmitter, receiver, polylineLayer = null, txMarker = null, rxMarker = null, elevationChart = null, streetLayer, satelliteLayer, placementMode = 'click';
 let atmosphericData = { humidity: 50, temperature: 15, pressure: 1013 };
 let lastAtmosphericUpdate = 0;
+let relayMarkers = []; // Track relay markers for removal
 
-// Initialize the map with Leaflet
+// Initialize the map
 function initMap() {
     map = L.map('map').setView([51.505, -0.09], 13);
 
@@ -82,24 +83,20 @@ function initMap() {
     L.control.scale().addTo(map);
 }
 
-// Switch between map layers
+// Switch map layers
 function changeMapLayer(layer) {
     if (!map) {
-        console.error('Map not initialized. Please check console for errors.');
+        console.error('Map not initialized.');
         return;
     }
-
     map.eachLayer((layerObj) => {
         if (layerObj instanceof L.TileLayer) {
             map.removeLayer(layerObj);
         }
     });
-
-    if (layer === 'street') {
-        streetLayer.addTo(map);
-    } else if (layer === 'satellite') {
-        satelliteLayer.addTo(map);
-    } else {
+    if (layer === 'street') streetLayer.addTo(map);
+    else if (layer === 'satellite') satelliteLayer.addTo(map);
+    else {
         console.warn('Unknown layer type:', layer);
         streetLayer.addTo(map);
     }
@@ -181,25 +178,18 @@ function bngToLatLon(bng) {
         alert('Invalid BNG reference. Use format like TQ123456 (6 or 8 digits).');
         return null;
     }
-
     const square = bng.substring(0, 2);
     const digits = bng.substring(2);
     const easting = parseInt(digits.substring(0, digits.length / 2));
     const northing = parseInt(digits.substring(digits.length / 2));
-
-    const squareCoords = {
-        'TQ': { east: 500000, north: 100000 },
-    };
-
+    const squareCoords = { 'TQ': { east: 500000, north: 100000 } };
     if (!squareCoords[square]) {
         alert('Unsupported BNG square. Use TQ for now.');
         return null;
     }
-
     let precision = digits.length === 8 ? 10 : 100;
     const fullEasting = squareCoords[square].east + easting * precision;
     const fullNorthing = squareCoords[square].north + northing * precision;
-
     const lat = (fullNorthing / 100000) * 0.9 + 49.5;
     const lon = (fullEasting / 100000) * 1.2 - 0.5;
     return L.latLng(lat, lon);
@@ -364,7 +354,7 @@ async function fetchElevationData(tx, rx, numPoints, retries = 3) {
         const stepDistance = tx.distanceTo(rx) / numPoints;
         data.results.forEach((result, i) => {
             if (result.elevation !== undefined) {
-                elevations.push({ distance: i * stepDistance, height: result.elevation });
+                elevations.push({ distance: i * stepDistance, height: result.elevation, lat: parseFloat(coords[i].split(',')[0]), lon: parseFloat(coords[i].split(',')[1]) });
             }
         });
         if (elevations.length === 0) {
@@ -519,8 +509,9 @@ async function analyzePath() {
     document.getElementById('fresnel-zone').innerHTML = '';
     document.getElementById('fresnel-zone').className = 'fresnel-zone';
 
+    let elevations;
     try {
-        const elevations = await fetchElevationData(transmitter, receiver, numPoints);
+        elevations = await fetchElevationData(transmitter, receiver, numPoints);
         if (elevations.length === 0) {
             document.getElementById('result').innerText = 'Failed to fetch elevation data';
             updatePolyline('gray');
@@ -583,7 +574,7 @@ async function analyzePath() {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Height (m)' }, min: 0, max: 100 },
+                        y: { beginAtZero: true, title: { display: true, text: 'Height (m)' }, min: 0 },
                         x: { title: { display: true, text: 'Distance (m)' } }
                     },
                     plugins: {
@@ -595,8 +586,9 @@ async function analyzePath() {
             document.getElementById('elevation-profile').style.display = 'block';
         }
 
-        calculateRF(totalDistance, elevations);
+        const { linkStatus } = calculateRF(totalDistance, elevations);
         visualizeFresnelZone(totalDistance, elevations);
+        return { linkStatus, elevations, totalDistance }; // Explicit return for suggestRelaySites
     } catch (fetchError) {
         console.error('Error in fetch process:', fetchError);
         document.getElementById('result').innerText = `Error fetching or processing data: ${fetchError.message}`;
@@ -604,6 +596,7 @@ async function analyzePath() {
         document.getElementById('fresnel-zone').style.display = 'none';
         document.getElementById('elevation-text').style.display = 'none';
         if (elevationChart) elevationChart.destroy();
+        return { linkStatus: 'Error', elevations: [], totalDistance: 0 }; // Return default on error
     }
 }
 
@@ -704,6 +697,7 @@ function calculateRF(totalDistance, elevations) {
     document.getElementById('result').innerHTML = linkBudget;
 
     updatePolyline(linkStatus === 'Link will work' ? 'green' : linkStatus === 'Link may fail due to insufficient margin' ? 'amber' : 'red');
+    return { linkStatus, elevations, totalDistance };
 }
 
 // Visualize Fresnel zone
@@ -721,7 +715,6 @@ function visualizeFresnelZone(totalDistance, elevations) {
 
     const maxHeight = Math.max(...elevations.map(e => e.height), txHeight, rxHeight) + 10;
     const heightScale = 150 / maxHeight;
-    const numPoints = elevations.length;
 
     let terrainPath = '';
     elevations.forEach((elevation, i) => {
@@ -773,6 +766,109 @@ function visualizeFresnelZone(totalDistance, elevations) {
     fresnelZoneDiv.style.display = 'block';
 }
 
+// Suggest relay sites
+async function suggestRelaySites() {
+    if (!transmitter || !receiver) {
+        alert('Please place both transmitter and receiver first.');
+        return;
+    }
+
+    const granularity = document.getElementById('pathGranularity').value;
+    let numPoints;
+    switch (granularity) {
+        case 'low': numPoints = 10; break;
+        case 'medium': numPoints = 50; break;
+        case 'high': numPoints = 100; break;
+        default: numPoints = 50;
+    }
+
+    const { linkStatus, elevations, totalDistance } = await analyzePath();
+    if (!elevations || elevations.length === 0) {
+        alert('No elevation data available to suggest relay sites.');
+        return;
+    }
+    if (linkStatus === 'Link will work') {
+        alert('Direct link is workable. No relay sites needed.');
+        return;
+    }
+
+    // Clear previous relay markers
+    relayMarkers.forEach(marker => map.removeLayer(marker));
+    relayMarkers = [];
+
+    const frequency = getFrequency();
+    const wavelength = 3e8 / frequency;
+    const { txHeight, rxHeight } = getAntennaHeights();
+    let relaySites = [];
+    let currentTx = { latLng: transmitter, elevation: elevations[0].height };
+    let remainingDistance = totalDistance;
+    let attempts = 0;
+    const maxAttempts = elevations.length;
+
+    console.log('Starting relay site suggestion...');
+    while (currentTx.latLng.lat !== receiver.lat || currentTx.latLng.lng !== receiver.lng) {
+        let maxReach = 0;
+        let bestRelay = null;
+
+        for (let i = 1; i < elevations.length; i++) {
+            const elevation = elevations[i];
+            const relayLatLng = L.latLng(elevation.lat, elevation.lon);
+            const segmentDistance = currentTx.latLng.distanceTo(relayLatLng);
+            if (segmentDistance > remainingDistance) break;
+
+            const segmentElevations = elevations.slice(0, i + 1);
+            const { linkStatus: segmentStatus } = calculateRF(segmentDistance, segmentElevations);
+            if (segmentStatus === 'Link will work' && segmentDistance > maxReach) {
+                maxReach = segmentDistance;
+                bestRelay = { latLng: relayLatLng, elevation: elevation.height };
+            }
+        }
+
+        if (!bestRelay) {
+            alert('No viable relay sites found to connect the path.');
+            return;
+        }
+
+        relaySites.push(bestRelay);
+        currentTx = bestRelay;
+        remainingDistance = receiver.distanceTo(currentTx.latLng);
+
+        const finalElevations = elevations.slice(elevations.findIndex(e => Math.abs(e.lat - currentTx.latLng.lat) < 0.0001 && Math.abs(e.lon - currentTx.latLng.lng) < 0.0001));
+        const finalDistance = currentTx.latLng.distanceTo(receiver);
+        const { linkStatus: finalStatus } = calculateRF(finalDistance, finalElevations);
+        console.log(`Relay ${relaySites.length}: From ${currentTx.latLng.lat},${currentTx.latLng.lng} to receiver, Status: ${finalStatus}`);
+        if (finalStatus === 'Link will work') {
+            break;
+        }
+
+        attempts++;
+        if (attempts >= maxAttempts) {
+            alert('Unable to find a complete relay path within the given points.');
+            return;
+        }
+    }
+
+    // Plot relay sites
+    relaySites.forEach((site, index) => {
+        const marker = L.marker(site.latLng, {
+            icon: L.icon({
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9InB1cnBsZSIvPjwvc3ZnPg==',
+                iconSize: [10, 10],
+                iconAnchor: [5, 5],
+                popupAnchor: [0, -5]
+            })
+        }).addTo(map).bindPopup(`Relay Site ${index + 1}<br>Elevation: ${site.elevation}m<br>Lat: ${site.latLng.lat.toFixed(4)}, Lon: ${site.latLng.lng.toFixed(4)}`);
+        relayMarkers.push(marker);
+    });
+
+    // Update polyline to show relay segments
+    if (polylineLayer) map.removeLayer(polylineLayer);
+    const path = [transmitter, ...relaySites.map(s => s.latLng), receiver];
+    polylineLayer = L.polyline(path, { color: 'purple', dashArray: '5, 10' }).addTo(map);
+
+    alert(`Suggested ${relaySites.length} relay site(s) to make the link workable.`);
+}
+
 // Show loading indicator
 function showLoading(show) {
     document.getElementById('loading').style.display = show ? 'block' : 'none';
@@ -784,7 +880,7 @@ function showLoading(show) {
     }
 }
 
-// Update polyline with distance label
+// Update polyline
 function updatePolyline(color) {
     if (polylineLayer) map.removeLayer(polylineLayer);
     if (transmitter && receiver) {
@@ -808,13 +904,15 @@ function updatePolyline(color) {
     }
 }
 
-// Reset the link
+// Reset link
 function resetLink() {
     transmitter = null;
     receiver = null;
     if (txMarker) map.removeLayer(txMarker);
     if (rxMarker) map.removeLayer(rxMarker);
     if (polylineLayer) map.removeLayer(polylineLayer);
+    relayMarkers.forEach(marker => map.removeLayer(marker));
+    relayMarkers = [];
     txMarker = null;
     rxMarker = null;
     polylineLayer = null;
@@ -890,11 +988,13 @@ function savePath() {
 function loadPath() {
     const pathData = JSON.parse(localStorage.getItem('rfPath') || '{}');
     if (pathData.transmitter && pathData.receiver) {
-        map.removeLayer(map.getLayerId(L.marker(transmitter)));
-        map.removeLayer(map.getLayerId(L.marker(receiver)));
+        if (txMarker) map.removeLayer(txMarker);
+        if (rxMarker) map.removeLayer(rxMarker);
         if (polylineLayer) map.removeLayer(polylineLayer);
+        relayMarkers.forEach(marker => map.removeLayer(marker));
+        relayMarkers = [];
         if (elevationChart) elevationChart.destroy();
-        
+
         transmitter = L.latLng(pathData.transmitter.lat, pathData.transmitter.lng);
         receiver = L.latLng(pathData.receiver.lat, pathData.receiver.lng);
         document.getElementById('frequency').value = pathData.frequency || '30';
@@ -997,17 +1097,19 @@ function importData() {
             try {
                 const pathData = JSON.parse(event.target.result);
                 if (pathData.transmitter && pathData.receiver) {
-                    map.removeLayer(map.getLayerId(L.marker(transmitter)));
-                    map.removeLayer(map.getLayerId(L.marker(receiver)));
+                    if (txMarker) map.removeLayer(txMarker);
+                    if (rxMarker) map.removeLayer(rxMarker);
                     if (polylineLayer) map.removeLayer(polylineLayer);
+                    relayMarkers.forEach(marker => map.removeLayer(marker));
+                    relayMarkers = [];
                     if (elevationChart) elevationChart.destroy();
-                    
+
                     transmitter = L.latLng(pathData.transmitter.lat, pathData.transmitter.lng);
                     receiver = L.latLng(pathData.receiver.lat, pathData.receiver.lng);
                     document.getElementById('frequency').value = pathData.frequency || '30';
                     document.getElementById('txHeight').value = pathData.txHeight || '5';
                     document.getElementById('rxHeight').value = pathData.rxHeight || '5';
-                    document.getElementById('txPower').value = pathData.txPower || '1'; // Import in watts
+                    document.getElementById('txPower').value = pathData.txPower || '1';
                     document.getElementById('rxSensitivity').value = pathData.rxSensitivity || '-90';
                     document.getElementById('txAntennaGain').value = pathData.txAntennaGain || '0';
                     document.getElementById('rxAntennaGain').value = pathData.rxAntennaGain || '0';
@@ -1066,15 +1168,17 @@ function importData() {
 }
 
 // Tooltips and help modal
-document.querySelectorAll('.tooltip').forEach(tooltip => {
-    tooltip.addEventListener('mouseover', () => {
-        const tooltipText = tooltip.getAttribute('data-tooltip');
-        tooltip.setAttribute('title', tooltipText);
+function setupTooltips() {
+    document.querySelectorAll('.tooltip').forEach(tooltip => {
+        tooltip.addEventListener('mouseover', () => {
+            const tooltipText = tooltip.getAttribute('data-tooltip');
+            tooltip.setAttribute('title', tooltipText);
+        });
+        tooltip.addEventListener('mouseout', () => {
+            tooltip.removeAttribute('title');
+        });
     });
-    tooltip.addEventListener('mouseout', () => {
-        tooltip.removeAttribute('title');
-    });
-});
+}
 
 function showHelp() {
     document.getElementById('help-modal').style.display = 'block';
@@ -1121,19 +1225,18 @@ function analyzeHF() {
             <tr><td>Frequency of Optimum Transmission (FOT)</td><td>${fot.toFixed(1)} MHz</td></tr>
             <tr><td>Maximum Usable Frequency (MUF)</td><td>${muf.toFixed(1)} MHz</td></tr>
         </table>
-        <p><strong>Notes:</strong> Results are approximate and depend on ionospheric conditions, which vary by time, season, and solar activity. Adjust inputs for more accurate predictions.</p>
+        <p><strong>Notes:</strong> Results are approximate and depend on ionospheric conditions.</p>
     `;
     document.getElementById('hf-result').innerHTML = hfResult;
 }
 
-// Calculate minimum effective height for HF skywave propagation
+// Calculate minimum effective height for HF skywave
 function calculateMinEffectiveHeight(antennaHeight, frequencyMHz) {
-    const wavelengthMeters = 300 / frequencyMHz; // Speed of light (m/s) / frequency (MHz) = wavelength (m)
-    const minHeight = Math.max(antennaHeight, 0.1 * wavelengthMeters); // Minimum 0.1 wavelength, but not less than current height
-    return minHeight;
+    const wavelengthMeters = 300 / frequencyMHz;
+    return Math.max(antennaHeight, 0.1 * wavelengthMeters);
 }
 
-// Calculate HF working frequencies (LUF, FOT, MUF)
+// Calculate HF working frequencies
 function calculateHFWorkingFrequencies(frequencyMHz, time, solarActivity) {
     let mufBase = 0;
     switch (solarActivity) {
@@ -1142,18 +1245,15 @@ function calculateHFWorkingFrequencies(frequencyMHz, time, solarActivity) {
         case 'high': mufBase = 35; break;
         default: mufBase = 25;
     }
-
-    if (time === 'night') mufBase *= 0.7; // Night reduces MUF
-    else mufBase *= 1.0; // Day maintains higher MUF
-
-    const muf = Math.min(mufBase, 30); // Cap at 30 MHz (HF upper limit)
-    const luf = Math.max(3, muf * 0.3); // LUF typically 30% of MUF, but not below 3 MHz
-    const fot = muf * 0.85; // FOT is ~85% of MUF for optimum transmission
-
+    if (time === 'night') mufBase *= 0.7;
+    else mufBase *= 1.0;
+    const muf = Math.min(mufBase, 30);
+    const luf = Math.max(3, muf * 0.3);
+    const fot = muf * 0.85;
     return { luf, fot, muf };
 }
 
-// Search for a location and center the map
+// Search location
 async function searchLocation() {
     const location = document.getElementById('locationSearch').value.trim();
     if (!location) {
@@ -1177,26 +1277,25 @@ async function searchLocation() {
             if (!data || data.length === 0) throw new Error('Location not found.');
             latLon = L.latLng(data[0].lat, data[0].lon);
         }
-
         map.setView(latLon, 13);
         showLoading(false);
         alert(`Map centered on ${location}`);
     } catch (error) {
         console.error('Error searching location:', error);
-        alert(`Error finding location: ${error.message}. Check the input and try again.`);
+        alert(`Error finding location: ${error.message}.`);
         showLoading(false);
     }
 }
 
-// Update atmospheric conditions from OpenWeatherMap
+// Update atmospheric conditions
 async function updateAtmosphericConditions() {
     if (!transmitter || !receiver) {
-        alert('Place both transmitter and receiver points to fetch atmospheric conditions.');
+        alert('Place both transmitter and receiver to fetch atmospheric conditions.');
         return;
     }
 
     const now = Date.now();
-    if (now - lastAtmosphericUpdate < 1800000) { // 30 minutes in milliseconds
+    if (now - lastAtmosphericUpdate < 1800000) {
         updateAtmosphericStatus();
         return;
     }
@@ -1217,18 +1316,17 @@ async function updateAtmosphericConditions() {
         };
         lastAtmosphericUpdate = now;
         updateAtmosphericStatus();
-        analyzePath(); // Re-analyze with updated conditions
+        analyzePath();
         showLoading(false);
     } catch (error) {
         console.error('Error fetching atmospheric conditions:', error);
-        alert(`Error updating atmospheric conditions: ${error.message}. Using default values (Humidity: 50%, Temp: 15°C, Pressure: 1013 hPa).`);
+        alert(`Error updating atmospheric conditions: ${error.message}. Using defaults.`);
         atmosphericData = { humidity: 50, temperature: 15, pressure: 1013 };
         lastAtmosphericUpdate = 0;
         updateAtmosphericStatus();
         showLoading(false);
     }
 }
-
 // Update atmospheric status display
 function updateAtmosphericStatus() {
     const status = `Current Atmospheric Conditions: Humidity: ${atmosphericData.humidity}%, Temp: ${atmosphericData.temperature}°C, Pressure: ${atmosphericData.pressure} hPa`;
