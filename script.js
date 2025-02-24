@@ -1,13 +1,12 @@
 // Global variables for map, markers, layers, and state
 let map, transmitter, receiver, polylineLayer = null, txMarker = null, rxMarker = null, elevationChart = null, streetLayer, satelliteLayer, placementMode = 'click';
-let atmosphericData = { humidity: 50, temperature: 15, pressure: 1013 }; // Default atmospheric values
+let atmosphericData = { humidity: 50, temperature: 15, pressure: 1013 };
 let lastAtmosphericUpdate = 0;
 
 // Initialize the map with Leaflet
 function initMap() {
-    map = L.map('map').setView([51.505, -0.09], 13); // Default to London
+    map = L.map('map').setView([51.505, -0.09], 13);
 
-    // Define base layers
     streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -18,12 +17,13 @@ function initMap() {
         attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
     });
 
-    // Add street layer as default
     streetLayer.addTo(map);
 
-    // Add click handler for placing markers
-    map.on('click', (e) => {
+    map.off('click');
+    map.on('click', async (e) => {
+        console.log(`Clicked at: Lat ${e.latlng.lat}, Lon ${e.latlng.lng}`);
         if (placementMode === 'click') {
+            const elevation = await getSingleElevation(e.latlng);
             if (!transmitter) {
                 transmitter = e.latlng;
                 txMarker = L.marker(transmitter, { 
@@ -34,10 +34,10 @@ function initMap() {
                         popupAnchor: [0, -5]
                     }),
                     draggable: true 
-                }).addTo(map).bindPopup('Transmitter').openPopup();
+                }).addTo(map).bindPopup(`Transmitter<br>Elevation: ${elevation}m`).openPopup();
                 txMarker.on('dragend', onMarkerDrag);
-                snapToRoad(txMarker);
-                updateAtmosphericConditions(); // Update conditions when placing transmitter
+                console.log(`Transmitter placed at: Lat ${transmitter.lat}, Lon ${transmitter.lng}`);
+                updateAtmosphericConditions();
             } else if (!receiver) {
                 receiver = e.latlng;
                 rxMarker = L.marker(receiver, { 
@@ -48,12 +48,12 @@ function initMap() {
                         popupAnchor: [0, -5]
                     }),
                     draggable: true 
-                }).addTo(map).bindPopup('Receiver').openPopup();
+                }).addTo(map).bindPopup(`Receiver<br>Elevation: ${elevation}m`).openPopup();
                 rxMarker.on('dragend', onMarkerDrag);
-                snapToRoad(rxMarker);
+                console.log(`Receiver placed at: Lat ${receiver.lat}, Lon ${receiver.lng}`);
                 if (polylineLayer) map.removeLayer(polylineLayer);
-                updatePolyline(); // Update or create polyline with initial color
-                analyzePath(); // Auto-analyze when receiver is set
+                updatePolyline();
+                analyzePath();
             } else {
                 map.removeLayer(txMarker);
                 map.removeLayer(rxMarker);
@@ -68,17 +68,16 @@ function initMap() {
                         popupAnchor: [0, -5]
                     }),
                     draggable: true 
-                }).addTo(map).bindPopup('Transmitter').openPopup();
+                }).addTo(map).bindPopup(`Transmitter<br>Elevation: ${elevation}m`).openPopup();
                 txMarker.on('dragend', onMarkerDrag);
-                snapToRoad(txMarker);
+                console.log(`Reset and placed Transmitter at: Lat ${transmitter.lat}, Lon ${transmitter.lng}`);
                 rxMarker = null;
-                updatePolyline(); // Reset polyline if needed
-                updateAtmosphericConditions(); // Update conditions when moving transmitter
+                updatePolyline();
+                updateAtmosphericConditions();
             }
         }
     });
 
-    // Add zoom control and scale bar
     L.control.zoom({ position: 'topright' }).addTo(map);
     L.control.scale().addTo(map);
 }
@@ -90,31 +89,34 @@ function changeMapLayer(layer) {
         return;
     }
 
-    // Remove all tile layers
     map.eachLayer((layerObj) => {
         if (layerObj instanceof L.TileLayer) {
             map.removeLayer(layerObj);
         }
     });
 
-    // Add the selected layer
     if (layer === 'street') {
         streetLayer.addTo(map);
     } else if (layer === 'satellite') {
         satelliteLayer.addTo(map);
     } else {
         console.warn('Unknown layer type:', layer);
-        streetLayer.addTo(map); // Default to street if invalid
+        streetLayer.addTo(map);
     }
 }
 
+// Update placement mode
 function updatePlacementMode(mode) {
     placementMode = mode;
     const bngGroup = document.getElementById('bng-group');
+    const coordGroup = document.getElementById('coord-group');
+    bngGroup.style.display = mode === 'bng' ? 'block' : 'none';
+    coordGroup.style.display = mode === 'coords' ? 'block' : 'none';
     if (mode === 'click') {
-        bngGroup.style.display = 'none';
-        map.off('click'); // Remove BNG click handler if any
-        map.on('click', (e) => {
+        map.off('click');
+        map.on('click', async (e) => {
+            console.log(`Clicked at (updatePlacementMode): Lat ${e.latlng.lat}, Lon ${e.latlng.lng}`);
+            const elevation = await getSingleElevation(e.latlng);
             if (!transmitter) {
                 transmitter = e.latlng;
                 txMarker = L.marker(transmitter, { 
@@ -125,26 +127,26 @@ function updatePlacementMode(mode) {
                         popupAnchor: [0, -5]
                     }),
                     draggable: true 
-                }).addTo(map).bindPopup('Transmitter').openPopup();
+                }).addTo(map).bindPopup(`Transmitter<br>Elevation: ${elevation}m`).openPopup();
                 txMarker.on('dragend', onMarkerDrag);
-                snapToRoad(txMarker);
-                updateAtmosphericConditions(); // Update conditions when placing transmitter
+                console.log(`Transmitter placed at: Lat ${transmitter.lat}, Lon ${transmitter.lng}`);
+                updateAtmosphericConditions();
             } else if (!receiver) {
                 receiver = e.latlng;
                 rxMarker = L.marker(receiver, { 
                     icon: L.icon({
-                        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
+                        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
                         iconSize: [10, 10],
                         iconAnchor: [5, 5],
                         popupAnchor: [0, -5]
                     }),
                     draggable: true 
-                }).addTo(map).bindPopup('Receiver').openPopup();
+                }).addTo(map).bindPopup(`Receiver<br>Elevation: ${elevation}m`).openPopup();
                 rxMarker.on('dragend', onMarkerDrag);
-                snapToRoad(rxMarker);
+                console.log(`Receiver placed at: Lat ${receiver.lat}, Lon ${receiver.lng}`);
                 if (polylineLayer) map.removeLayer(polylineLayer);
-                updatePolyline(); // Update or create polyline with initial color
-                analyzePath(); // Auto-analyze when receiver is set
+                updatePolyline();
+                analyzePath();
             } else {
                 map.removeLayer(txMarker);
                 map.removeLayer(rxMarker);
@@ -153,27 +155,26 @@ function updatePlacementMode(mode) {
                 receiver = null;
                 txMarker = L.marker(transmitter, { 
                     icon: L.icon({
-                        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
+                        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
                         iconSize: [10, 10],
                         iconAnchor: [5, 5],
                         popupAnchor: [0, -5]
                     }),
                     draggable: true 
-                }).addTo(map).bindPopup('Transmitter').openPopup();
+                }).addTo(map).bindPopup(`Transmitter<br>Elevation: ${elevation}m`).openPopup();
                 txMarker.on('dragend', onMarkerDrag);
-                snapToRoad(txMarker);
+                console.log(`Reset and placed Transmitter at: Lat ${transmitter.lat}, Lon ${transmitter.lng}`);
                 rxMarker = null;
-                updatePolyline(); // Reset polyline if needed
-                updateAtmosphericConditions(); // Update conditions when moving transmitter
+                updatePolyline();
+                updateAtmosphericConditions();
             }
         });
-    } else if (mode === 'bng') {
-        bngGroup.style.display = 'block';
-        map.off('click'); // Remove click handler for BNG mode
+    } else {
+        map.off('click');
     }
 }
 
-// Convert British National Grid (BNG) reference to latitude/longitude (simplified approximation)
+// Convert BNG to lat/lon
 function bngToLatLon(bng) {
     bng = bng.toUpperCase().trim();
     if (!/^[A-Z]{2}\d{6,8}$/.test(bng)) {
@@ -181,36 +182,30 @@ function bngToLatLon(bng) {
         return null;
     }
 
-    const square = bng.substring(0, 2); // e.g., TQ
-    const digits = bng.substring(2); // e.g., 123456 or 12323456
+    const square = bng.substring(0, 2);
+    const digits = bng.substring(2);
     const easting = parseInt(digits.substring(0, digits.length / 2));
     const northing = parseInt(digits.substring(digits.length / 2));
 
-    // Map square to base coordinates (simplified, approximate for TQ square)
     const squareCoords = {
-        'TQ': { east: 500000, north: 100000 }, // TQ square base (approximate)
-        // Add more squares as needed (e.g., SU, SP, etc.)
+        'TQ': { east: 500000, north: 100000 },
     };
 
     if (!squareCoords[square]) {
-        alert('Unsupported BNG square. Use TQ for now (add more in code if needed).');
+        alert('Unsupported BNG square. Use TQ for now.');
         return null;
     }
 
-    // Adjust for 6 or 8 digits (6 digits = 100m precision, 8 digits = 10m precision)
-    let precision = 100; // Default for 6 digits
-    if (digits.length === 8) precision = 10;
-
+    let precision = digits.length === 8 ? 10 : 100;
     const fullEasting = squareCoords[square].east + easting * precision;
     const fullNorthing = squareCoords[square].north + northing * precision;
 
-    // Simplified conversion from OSGB36 (BNG) to WGS84 (lat/lon)
-    const lat = (fullNorthing / 100000) * 0.9 + 49.5; // Approximate for TQ (London area)
-    const lon = (fullEasting / 100000) * 1.2 - 0.5;   // Approximate for TQ (London area)
-
+    const lat = (fullNorthing / 100000) * 0.9 + 49.5;
+    const lon = (fullEasting / 100000) * 1.2 - 0.5;
     return L.latLng(lat, lon);
 }
 
+// Place marker from BNG
 function placeFromBNG(type) {
     const bngInput = type === 'transmitter' ? document.getElementById('txBNG') : document.getElementById('rxBNG');
     const bng = bngInput.value;
@@ -222,7 +217,7 @@ function placeFromBNG(type) {
         transmitter = latLon;
         txMarker = L.marker(transmitter, { 
             icon: L.icon({
-                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
                 iconSize: [10, 10],
                 iconAnchor: [5, 5],
                 popupAnchor: [0, -5]
@@ -230,14 +225,13 @@ function placeFromBNG(type) {
             draggable: true 
         }).addTo(map).bindPopup('Transmitter').openPopup();
         txMarker.on('dragend', onMarkerDrag);
-        snapToRoad(txMarker);
-        updateAtmosphericConditions(); // Update conditions when placing transmitter
+        updateAtmosphericConditions();
     } else if (type === 'receiver') {
         if (rxMarker) map.removeLayer(rxMarker);
         receiver = latLon;
         rxMarker = L.marker(receiver, { 
             icon: L.icon({
-                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
                 iconSize: [10, 10],
                 iconAnchor: [5, 5],
                 popupAnchor: [0, -5]
@@ -245,13 +239,59 @@ function placeFromBNG(type) {
             draggable: true 
         }).addTo(map).bindPopup('Receiver').openPopup();
         rxMarker.on('dragend', onMarkerDrag);
-        snapToRoad(rxMarker);
         if (polylineLayer) map.removeLayer(polylineLayer);
-        updatePolyline(); // Update or create polyline with initial color
-        analyzePath(); // Auto-analyze when receiver is set
+        updatePolyline();
+        analyzePath();
     }
 }
 
+// Place marker from coordinates
+async function placeFromCoords(type) {
+    const latInput = type === 'transmitter' ? document.getElementById('txLat') : document.getElementById('rxLat');
+    const lngInput = type === 'transmitter' ? document.getElementById('txLng') : document.getElementById('rxLng');
+    const lat = parseFloat(latInput.value);
+    const lng = parseFloat(lngInput.value);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        alert('Invalid coordinates. Latitude must be -90 to 90, Longitude -180 to 180.');
+        return;
+    }
+    const latLng = L.latLng(lat, lng);
+    const elevation = await getSingleElevation(latLng);
+
+    if (type === 'transmitter') {
+        if (txMarker) map.removeLayer(txMarker);
+        transmitter = latLng;
+        txMarker = L.marker(transmitter, { 
+            icon: L.icon({
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
+                iconSize: [10, 10],
+                iconAnchor: [5, 5],
+                popupAnchor: [0, -5]
+            }),
+            draggable: true 
+        }).addTo(map).bindPopup(`Transmitter<br>Elevation: ${elevation}m`).openPopup();
+        txMarker.on('dragend', onMarkerDrag);
+        updateAtmosphericConditions();
+    } else if (type === 'receiver') {
+        if (rxMarker) map.removeLayer(rxMarker);
+        receiver = latLng;
+        rxMarker = L.marker(receiver, { 
+            icon: L.icon({
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
+                iconSize: [10, 10],
+                iconAnchor: [5, 5],
+                popupAnchor: [0, -5]
+            }),
+            draggable: true 
+        }).addTo(map).bindPopup(`Receiver<br>Elevation: ${elevation}m`).openPopup();
+        rxMarker.on('dragend', onMarkerDrag);
+        if (polylineLayer) map.removeLayer(polylineLayer);
+        updatePolyline();
+        analyzePath();
+    }
+}
+
+// Handle marker dragging
 function onMarkerDrag(e) {
     const marker = e.target;
     const latLng = marker.getLatLng();
@@ -262,40 +302,28 @@ function onMarkerDrag(e) {
     }
     if (transmitter && receiver) {
         if (polylineLayer) map.removeLayer(polylineLayer);
-        updatePolyline(); // Update polyline after drag
-        snapToRoad(marker); // Snap to road after drag
-        analyzePath(); // Re-analyze after dragging
-        updateAtmosphericConditions(); // Update conditions when dragging markers
+        updatePolyline();
+        analyzePath();
+        updateAtmosphericConditions();
     }
 }
 
-function snapToRoad(marker) {
-    const latLng = marker.getLatLng();
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.lat}&lon=${latLng.lng}&addressdetails=1`)
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.address && data.address.road) {
-                fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(data.address.road)}&format=json&limit=1`)
-                    .then(response => response.json())
-                    .then(roadData => {
-                        if (roadData && roadData.length > 0) {
-                            const roadLatLng = L.latLng(roadData[0].lat, roadData[0].lon);
-                            marker.setLatLng(roadLatLng);
-                            if (marker === txMarker) transmitter = roadLatLng;
-                            else if (marker === rxMarker) receiver = roadLatLng;
-                            if (transmitter && receiver) {
-                                if (polylineLayer) map.removeLayer(polylineLayer);
-                                updatePolyline();
-                                analyzePath();
-                            }
-                        }
-                    })
-                    .catch(error => console.error('Error snapping to road:', error));
-            }
-        })
-        .catch(error => console.error('Error getting road data:', error));
+// Fetch single-point elevation
+async function getSingleElevation(latlng) {
+    try {
+        const response = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${latlng.lat},${latlng.lng}`);
+        const data = await response.json();
+        if (data.results && data.results.length > 0 && data.results[0].elevation !== undefined) {
+            return data.results[0].elevation.toFixed(1);
+        }
+        return 'N/A';
+    } catch (error) {
+        console.error('Error fetching elevation:', error);
+        return 'N/A';
+    }
 }
 
+// Fetch elevation data for path
 async function fetchElevationData(tx, rx, numPoints, retries = 3) {
     showLoading(true);
     console.log('Attempting to fetch elevation data for:', tx, rx, numPoints, 'Retries left:', retries);
@@ -316,12 +344,12 @@ async function fetchElevationData(tx, rx, numPoints, retries = 3) {
     const url = `https://api.open-elevation.com/api/v1/lookup?locations=${locations}`;
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (!response.ok) {
-            if (response.status === 429 && retries > 0) { // Rate limit exceeded
+            if (response.status === 429 && retries > 0) {
                 console.warn('Rate limit hit, retrying in 2 seconds...');
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 return await fetchElevationData(tx, rx, numPoints, retries - 1);
@@ -348,18 +376,19 @@ async function fetchElevationData(tx, rx, numPoints, retries = 3) {
         showLoading(false);
         if (error.name === 'AbortError') {
             console.error('Request timed out:', error);
-            alert('Elevation data request timed out. Check your internet connection or try again later.');
+            alert('Elevation data request timed out.');
         } else if (retries > 0 && error.message.includes('429')) {
             console.warn('Retrying due to rate limit...');
             return await fetchElevationData(tx, rx, numPoints, retries - 1);
         } else {
             console.error('Error fetching elevation:', error);
-            alert(`Error fetching elevation data: ${error.message}. Check console for details.`);
+            alert(`Error fetching elevation data: ${error.message}.`);
         }
         return [];
     }
 }
 
+// Get frequency
 function getFrequency() {
     const freqInput = document.getElementById('frequency').value;
     const freqMHz = parseFloat(freqInput) || 30;
@@ -367,18 +396,19 @@ function getFrequency() {
         alert('Invalid frequency value. Defaulting to 30 MHz.');
         document.getElementById('frequency').value = '30';
         document.getElementById('frequency').classList.remove('invalid');
-        return 30 * 1e6; // Default to 30 MHz in Hz
+        return 30 * 1e6;
     }
     if ((freqMHz >= 30 && freqMHz <= 87.975) || (freqMHz >= 225 && freqMHz <= 450)) {
         document.getElementById('frequency').classList.remove('invalid');
-        return freqMHz * 1e6; // Convert to Hz
+        return freqMHz * 1e6;
     }
     alert('Frequency must be between 30-87.975 MHz or 225-450 MHz. Defaulting to 30 MHz.');
     document.getElementById('frequency').classList.remove('invalid');
     document.getElementById('frequency').value = '30';
-    return 30 * 1e6; // Default to 30 MHz in Hz
+    return 30 * 1e6;
 }
 
+// Get antenna heights
 function getAntennaHeights() {
     const txHeightInput = document.getElementById('txHeight').value;
     const rxHeightInput = document.getElementById('rxHeight').value;
@@ -401,19 +431,20 @@ function getAntennaHeights() {
     return { txHeight, rxHeight };
 }
 
+// Get link parameters
 function getLinkParameters() {
     const txPowerInput = document.getElementById('txPower').value;
     const rxSensitivityInput = document.getElementById('rxSensitivity').value;
     const txAntennaGain = parseFloat(document.getElementById('txAntennaGain').value) || 0;
     const rxAntennaGain = parseFloat(document.getElementById('rxAntennaGain').value) || 0;
-    const txPowerWatts = parseFloat(txPowerInput) || 1; // Default to 1 W (30 dBm)
-    const rxSensitivity = parseFloat(rxSensitivityInput) || -90; // Default to -90 dBm
+    const txPowerWatts = parseFloat(txPowerInput) || 1;
+    const rxSensitivity = parseFloat(rxSensitivityInput) || -90;
 
     if (isNaN(txPowerWatts) || txPowerWatts <= 0) {
-        alert('Invalid transmitter power. Power must be a positive value in watts. Defaulting to 1 W (30 dBm).');
+        alert('Invalid transmitter power. Defaulting to 1 W (30 dBm).');
         document.getElementById('txPower').value = '1';
         document.getElementById('txPower').classList.remove('invalid');
-        return { txPower: 30, rxSensitivity: -90, txAntennaGain: 0, rxAntennaGain: 0 }; // 1 W = 30 dBm
+        return { txPower: 30, rxSensitivity: -90, txAntennaGain: 0, rxAntennaGain: 0 };
     }
     if (isNaN(rxSensitivity)) {
         alert('Invalid receiver sensitivity. Defaulting to -90 dBm.');
@@ -422,13 +453,13 @@ function getLinkParameters() {
         return { txPower: wattsToDbm(txPowerWatts), rxSensitivity: -90, txAntennaGain, rxAntennaGain };
     }
     if (isNaN(txAntennaGain) || txAntennaGain < -10 || txAntennaGain > 30) {
-        alert('Invalid transmitter antenna gain. Must be between -10 and 30 dBi. Defaulting to 0 dBi.');
+        alert('Invalid transmitter antenna gain. Defaulting to 0 dBi.');
         document.getElementById('txAntennaGain').value = '0';
         document.getElementById('txAntennaGain').classList.remove('invalid');
         txAntennaGain = 0;
     }
     if (isNaN(rxAntennaGain) || rxAntennaGain < -10 || rxAntennaGain > 30) {
-        alert('Invalid receiver antenna gain. Must be between -10 and 30 dBi. Defaulting to 0 dBi.');
+        alert('Invalid receiver antenna gain. Defaulting to 0 dBi.');
         document.getElementById('rxAntennaGain').value = '0';
         document.getElementById('rxAntennaGain').classList.remove('invalid');
         rxAntennaGain = 0;
@@ -443,18 +474,19 @@ function getLinkParameters() {
 
 // Convert watts to dBm
 function wattsToDbm(watts) {
-    return 10 * Math.log10(watts * 1000); // 1 W = 1000 mW, dBm = 10 * log10(mW)
+    return 10 * Math.log10(watts * 1000);
 }
 
-// Convert dBm to watts (for display if needed)
+// Convert dBm to watts
 function dbmToWatts(dbm) {
-    return Math.pow(10, (dbm - 30) / 10); // 30 dBm = 1 W
+    return Math.pow(10, (dbm - 30) / 10);
 }
 
+// Analyze the path
 async function analyzePath() {
     if (!map || !transmitter || !receiver) {
         document.getElementById('result').innerText = 'Map or points not initialized. Select both points first.';
-        updatePolyline('gray'); // Gray if no analysis
+        updatePolyline('gray');
         document.getElementById('fresnel-zone').style.display = 'none';
         document.getElementById('elevation-text').style.display = 'none';
         if (elevationChart) elevationChart.destroy();
@@ -498,7 +530,6 @@ async function analyzePath() {
             return;
         }
 
-        // Display elevation profile (prefer chart, fall back to text)
         const canvas = document.getElementById('elevation-profile');
         if (elevationChart) elevationChart.destroy();
         if (typeof Chart === 'undefined') {
@@ -540,12 +571,12 @@ async function analyzePath() {
                         label: 'Min Effective Height (HF Skywave, m)',
                         data: elevations.map(() => {
                             const { txHeight } = getAntennaHeights();
-                            return calculateMinEffectiveHeight(txHeight, getFrequency() / 1e6); // Convert Hz to MHz
+                            return calculateMinEffectiveHeight(txHeight, getFrequency() / 1e6);
                         }),
                         borderColor: 'orange',
                         fill: false,
                         tension: 0.1,
-                        borderDash: [5, 5] // Dashed line for visibility
+                        borderDash: [5, 5]
                     }]
                 },
                 options: {
@@ -556,9 +587,7 @@ async function analyzePath() {
                         x: { title: { display: true, text: 'Distance (m)' } }
                     },
                     plugins: {
-                        legend: {
-                            position: 'top'
-                        }
+                        legend: { position: 'top' }
                     }
                 }
             });
@@ -578,6 +607,7 @@ async function analyzePath() {
     }
 }
 
+// Calculate RF link budget
 function calculateRF(totalDistance, elevations) {
     const frequency = getFrequency();
     const { txHeight, rxHeight } = getAntennaHeights();
@@ -593,7 +623,6 @@ function calculateRF(totalDistance, elevations) {
 
     const fspl = 20 * Math.log10(totalDistance) + 20 * Math.log10(frequency) + 20 * Math.log10(4 * Math.PI / 3e8);
 
-    // Terrain diffraction and clutter loss
     let terrainLoss = 0;
     switch (terrainType) {
         case 'open': terrainLoss = 0; break;
@@ -602,20 +631,18 @@ function calculateRF(totalDistance, elevations) {
         case 'forest': terrainLoss = 8; break;
         default: terrainLoss = 0;
     }
-    terrainLoss *= (totalDistance / 1000); // Scale loss per km
+    terrainLoss *= (totalDistance / 1000);
 
-    // Atmospheric attenuation (simplified ITU-R P.453 model for VHF/UHF, approximate for HF)
     let atmosphericLoss = 0;
-    if (frequency / 1e6 <= 30) { // HF
-        atmosphericLoss = Math.min(0.1 * (totalDistance / 1000), 5); // Max 5 dB for long paths
-    } else { // VHF/UHF
+    if (frequency / 1e6 <= 30) {
+        atmosphericLoss = Math.min(0.1 * (totalDistance / 1000), 5);
+    } else {
         const humidityFactor = Math.max(0, humidity - 50) * 0.01 * (totalDistance / 1000);
         const tempFactor = (temperature - 15) * 0.02 * (totalDistance / 1000);
         const pressureFactor = (pressure - 1013) * 0.001 * (totalDistance / 1000);
         atmosphericLoss = humidityFactor + tempFactor + pressureFactor;
     }
 
-    // Knife-edge diffraction (refined)
     const maxElevation = Math.max(...elevations.map(e => e.height || 0));
     const heightDiff = maxElevation - (txHeight + rxHeight) / 2;
     let diffractionLoss = 0;
@@ -631,11 +658,11 @@ function calculateRF(totalDistance, elevations) {
         return elevation.height <= (Math.min(txHeight, rxHeight) + fresnelRadius);
     });
 
-    const effectiveTxPower = txPower + txAntennaGain; // ERP in dBm, no cable loss
+    const effectiveTxPower = txPower + txAntennaGain;
     const totalLoss = fspl + terrainLoss + atmosphericLoss + diffractionLoss;
     const receivedPower = effectiveTxPower - totalLoss + rxAntennaGain;
-    const snr = receivedPower; // Simplified, assuming 0 dB noise for demo
-    const fadeMargin = 15; // Typical fade margin (10–20 dB)
+    const snr = receivedPower;
+    const fadeMargin = 15;
 
     let linkStatus = '';
     if (receivedPower >= rxSensitivity + fadeMargin) {
@@ -648,7 +675,7 @@ function calculateRF(totalDistance, elevations) {
 
     const maxAllowableLoss = effectiveTxPower - rxSensitivity - fadeMargin;
     const txPowerWatts = dbmToWatts(txPower);
-    const minEffectiveHeight = calculateMinEffectiveHeight(txHeight, frequency / 1e6); // MHz
+    const minEffectiveHeight = calculateMinEffectiveHeight(txHeight, frequency / 1e6);
 
     const linkBudget = `
         <h3>Link Budget Summary</h3>
@@ -679,6 +706,7 @@ function calculateRF(totalDistance, elevations) {
     updatePolyline(linkStatus === 'Link will work' ? 'green' : linkStatus === 'Link may fail due to insufficient margin' ? 'amber' : 'red');
 }
 
+// Visualize Fresnel zone
 function visualizeFresnelZone(totalDistance, elevations) {
     const frequency = getFrequency();
     const wavelength = 3e8 / frequency;
@@ -691,12 +719,10 @@ function visualizeFresnelZone(totalDistance, elevations) {
     let svgContent = '';
     let isObstructed = false;
 
-    // Calculate scaling for SVG (150px height, 100% width)
     const maxHeight = Math.max(...elevations.map(e => e.height), txHeight, rxHeight) + 10;
     const heightScale = 150 / maxHeight;
     const numPoints = elevations.length;
 
-    // Draw terrain elevation as a path
     let terrainPath = '';
     elevations.forEach((elevation, i) => {
         const x = (elevation.distance / totalDistance) * 100;
@@ -705,8 +731,7 @@ function visualizeFresnelZone(totalDistance, elevations) {
         else terrainPath += ` L ${x}% ${y}`;
     });
 
-    // Draw Fresnel zone ellipse (n=1, simplified as an ellipse along the path)
-    const d1 = totalDistance / 2; // Approximate midpoint for simplicity
+    const d1 = totalDistance / 2;
     const d2 = totalDistance - d1;
     const fresnelRadius = Math.sqrt((wavelength * d1 * d2) / totalDistance);
     const ellipseHeight = fresnelRadius * heightScale * 2;
@@ -716,15 +741,12 @@ function visualizeFresnelZone(totalDistance, elevations) {
         <text class="fresnel-label" x="50%" y="${ellipseY - 10}" text-anchor="middle">n=1</text>
     `;
 
-    // Draw line-of-sight (LOS) path
     svgContent += `
         <line x1="0%" y1="${150 - txHeight * heightScale}" x2="100%" y2="${150 - rxHeight * heightScale}" stroke="blue" stroke-width="1" />
     `;
 
-    // Draw terrain path
     svgContent += `<path d="${terrainPath}" fill="none" stroke="gray" stroke-width="2" />`;
 
-    // Add labels for distances and radius
     svgContent += `
         <text class="fresnel-label" x="25%" y="140" text-anchor="middle">d1=${Math.round(d1)}m</text>
         <text class="fresnel-label" x="75%" y="140" text-anchor="middle">d2=${Math.round(d2)}m</text>
@@ -732,7 +754,6 @@ function visualizeFresnelZone(totalDistance, elevations) {
         <text class="fresnel-label" x="0%" y="160" text-anchor="start">D=${Math.round(totalDistance)}m</text>
     `;
 
-    // Check for obstructions (terrain above Fresnel clearance)
     elevations.forEach(elevation => {
         const d1 = elevation.distance;
         const d2 = totalDistance - d1;
@@ -752,16 +773,18 @@ function visualizeFresnelZone(totalDistance, elevations) {
     fresnelZoneDiv.style.display = 'block';
 }
 
+// Show loading indicator
 function showLoading(show) {
     document.getElementById('loading').style.display = show ? 'block' : 'none';
     if (!show) {
         const resultDiv = document.getElementById('result');
         if (resultDiv.innerText === 'Loading...') {
-            resultDiv.innerText = 'Analysis failed or no data available. Check inputs or try again.';
+            resultDiv.innerText = 'Analysis failed or no data available.';
         }
     }
 }
 
+// Update polyline with distance label
 function updatePolyline(color) {
     if (polylineLayer) map.removeLayer(polylineLayer);
     if (transmitter && receiver) {
@@ -769,9 +792,23 @@ function updatePolyline(color) {
             color: color || 'gray',
             className: `polyline-${color}`
         }).addTo(map);
+
+        const distance = transmitter.distanceTo(receiver) / 1000;
+        const midPoint = L.latLng(
+            (transmitter.lat + receiver.lat) / 2,
+            (transmitter.lng + receiver.lng) / 2
+        );
+        L.marker(midPoint, {
+            icon: L.divIcon({
+                className: 'distance-label',
+                html: `${distance.toFixed(2)} km`,
+                iconSize: [100, 20]
+            })
+        }).addTo(map);
     }
 }
 
+// Reset the link
 function resetLink() {
     transmitter = null;
     receiver = null;
@@ -785,7 +822,7 @@ function resetLink() {
     document.getElementById('frequency').value = '30';
     document.getElementById('txHeight').value = '5';
     document.getElementById('rxHeight').value = '5';
-    document.getElementById('txPower').value = '1'; // Default to 1 W (30 dBm)
+    document.getElementById('txPower').value = '1';
     document.getElementById('rxSensitivity').value = '-90';
     document.getElementById('txAntennaGain').value = '0';
     document.getElementById('rxAntennaGain').value = '0';
@@ -814,9 +851,14 @@ function resetLink() {
     document.querySelector('input[value="click"]').checked = true;
     updatePlacementMode('click');
     document.getElementById('hf-analysis').style.display = 'none';
+    document.getElementById('txLat').value = '';
+    document.getElementById('txLng').value = '';
+    document.getElementById('rxLat').value = '';
+    document.getElementById('rxLng').value = '';
     alert('Link reset successfully!');
 }
 
+// Save path
 function savePath() {
     if (transmitter && receiver) {
         const pathData = {
@@ -825,7 +867,7 @@ function savePath() {
             frequency: document.getElementById('frequency').value || '30',
             txHeight: document.getElementById('txHeight').value || '5',
             rxHeight: document.getElementById('rxHeight').value || '5',
-            txPower: document.getElementById('txPower').value || '1', // Store in watts
+            txPower: document.getElementById('txPower').value || '1',
             rxSensitivity: document.getElementById('rxSensitivity').value || '-90',
             txAntennaGain: document.getElementById('txAntennaGain').value || '0',
             rxAntennaGain: document.getElementById('rxAntennaGain').value || '0',
@@ -844,6 +886,7 @@ function savePath() {
     }
 }
 
+// Load path
 function loadPath() {
     const pathData = JSON.parse(localStorage.getItem('rfPath') || '{}');
     if (pathData.transmitter && pathData.receiver) {
@@ -857,7 +900,7 @@ function loadPath() {
         document.getElementById('frequency').value = pathData.frequency || '30';
         document.getElementById('txHeight').value = pathData.txHeight || '5';
         document.getElementById('rxHeight').value = pathData.rxHeight || '5';
-        document.getElementById('txPower').value = pathData.txPower || '1'; // Load in watts
+        document.getElementById('txPower').value = pathData.txPower || '1';
         document.getElementById('rxSensitivity').value = pathData.rxSensitivity || '-90';
         document.getElementById('txAntennaGain').value = pathData.txAntennaGain || '0';
         document.getElementById('rxAntennaGain').value = pathData.rxAntennaGain || '0';
@@ -876,7 +919,7 @@ function loadPath() {
 
         txMarker = L.marker(transmitter, { 
             icon: L.icon({
-                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
                 iconSize: [10, 10],
                 iconAnchor: [5, 5],
                 popupAnchor: [0, -5]
@@ -885,7 +928,7 @@ function loadPath() {
         }).addTo(map).bindPopup('Transmitter').openPopup();
         rxMarker = L.marker(receiver, { 
             icon: L.icon({
-                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
                 iconSize: [10, 10],
                 iconAnchor: [5, 5],
                 popupAnchor: [0, -5]
@@ -894,8 +937,6 @@ function loadPath() {
         }).addTo(map).bindPopup('Receiver').openPopup();
         txMarker.on('dragend', onMarkerDrag);
         rxMarker.on('dragend', onMarkerDrag);
-        snapToRoad(txMarker);
-        snapToRoad(rxMarker);
         updatePolyline('gray');
         analyzePath();
         document.getElementById('elevation-profile').style.display = 'block';
@@ -912,6 +953,7 @@ function loadPath() {
     }
 }
 
+// Export data
 function exportData() {
     if (!transmitter || !receiver) {
         alert('Select both points before exporting.');
@@ -923,7 +965,7 @@ function exportData() {
         frequency: document.getElementById('frequency').value || '30',
         txHeight: document.getElementById('txHeight').value || '5',
         rxHeight: document.getElementById('rxHeight').value || '5',
-        txPower: document.getElementById('txPower').value || '1', // Export in watts
+        txPower: document.getElementById('txPower').value || '1',
         rxSensitivity: document.getElementById('rxSensitivity').value || '-90',
         txAntennaGain: document.getElementById('txAntennaGain').value || '0',
         rxAntennaGain: document.getElementById('rxAntennaGain').value || '0',
@@ -943,6 +985,7 @@ function exportData() {
     document.body.removeChild(downloadAnchor);
 }
 
+// Import data
 function importData() {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -980,7 +1023,7 @@ function importData() {
 
                     txMarker = L.marker(transmitter, { 
                         icon: L.icon({
-                            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
+                            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9ImJsdWUiLz48L3N2Zz4=',
                             iconSize: [10, 10],
                             iconAnchor: [5, 5],
                             popupAnchor: [0, -5]
@@ -989,7 +1032,7 @@ function importData() {
                     }).addTo(map).bindPopup('Transmitter').openPopup();
                     rxMarker = L.marker(receiver, { 
                         icon: L.icon({
-                            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVightPSIxMCI+PGNpcmNsZSBjeD0iNSIgY3y9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
+                            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PGNpcmNsZSBjeD0iNSIgY3k9IjUiIHI9IjUiIGZpbGw9InJlZCIvPjwvc3ZnPg==',
                             iconSize: [10, 10],
                             iconAnchor: [5, 5],
                             popupAnchor: [0, -5]
@@ -998,8 +1041,6 @@ function importData() {
                     }).addTo(map).bindPopup('Receiver').openPopup();
                     txMarker.on('dragend', onMarkerDrag);
                     rxMarker.on('dragend', onMarkerDrag);
-                    snapToRoad(txMarker);
-                    snapToRoad(rxMarker);
                     updatePolyline('gray');
                     analyzePath();
                     document.getElementById('elevation-profile').style.display = 'block';
