@@ -3,12 +3,15 @@ let map, transmitter, receiver, polylineLayer = null, txMarker = null, rxMarker 
 let atmosphericData = { humidity: 50, temperature: 15, pressure: 1013 };
 let lastAtmosphericUpdate = 0;
 let relayMarkers = []; // Track relay markers for removal
+let transmitterGroundElevation = 0; // Default to 0 m if not set
+let receiverGroundElevation = 0;    // Default to 0 m if not set
 
 // Initialize the map
 function initMap() {
     console.log('Initializing map...');
     try {
         map = L.map('map').setView([51.505, -0.09], 13);
+        map.obstructionLayers = []; // Initialize obstruction layers array
 
         streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -35,6 +38,7 @@ function initMap() {
                 console.log('Map clicked at:', e.latlng); // Debug log
                 console.log('Current placementMode:', placementMode);
                 if (placementMode === 'click') {
+                    showLoading(true); // Show loading indicator
                     const elevation = await getSingleElevation(e.latlng);
                     console.log(`Elevation at click: ${elevation}m`);
                     if (!transmitter && confirm('Place transmitter at this location?')) {
@@ -51,6 +55,7 @@ function initMap() {
                         txMarker.on('dragend', onMarkerDrag);
                         console.log(`Transmitter placed at: Lat ${transmitter.lat}, Lon ${transmitter.lng}`);
                         updateAtmosphericConditions();
+                        showLoading(false); // Hide loading indicator after placement
                     } else if (!receiver && confirm('Place receiver at this location?')) {
                         receiver = e.latlng;
                         rxMarker = L.marker(receiver, { 
@@ -67,6 +72,7 @@ function initMap() {
                         if (polylineLayer) map.removeLayer(polylineLayer);
                         updatePolyline();
                         analyzePath();
+                        showLoading(false); // Hide loading indicator after placement
                     } else if (confirm('Reset and place new transmitter at this location?')) {
                         map.removeLayer(txMarker);
                         map.removeLayer(rxMarker);
@@ -87,8 +93,10 @@ function initMap() {
                         rxMarker = null;
                         updatePolyline();
                         updateAtmosphericConditions();
+                        showLoading(false); // Hide loading indicator after placement
                     } else {
                         console.log('Click canceled by user');
+                        showLoading(false); // Hide loading indicator if canceled
                     }
                 } else {
                     console.log('Click ignored: Not in click mode');
@@ -123,6 +131,7 @@ function updatePlacementMode(mode) {
             console.log('Attaching click listener for click mode...');
             map.on('click', async (e) => {
                 console.log('Map clicked in click mode at:', e.latlng); // Debug log
+                showLoading(true); // Show loading indicator
                 const elevation = await getSingleElevation(e.latlng);
                 console.log(`Elevation at click: ${elevation}m`);
                 if (!transmitter && confirm('Place transmitter at this location?')) {
@@ -139,6 +148,7 @@ function updatePlacementMode(mode) {
                     txMarker.on('dragend', onMarkerDrag);
                     console.log(`Transmitter placed at: Lat ${transmitter.lat}, Lon ${transmitter.lng}`);
                     updateAtmosphericConditions();
+                    showLoading(false); // Hide loading indicator after placement
                 } else if (!receiver && confirm('Place receiver at this location?')) {
                     receiver = e.latlng;
                     rxMarker = L.marker(receiver, { 
@@ -155,6 +165,7 @@ function updatePlacementMode(mode) {
                     if (polylineLayer) map.removeLayer(polylineLayer);
                     updatePolyline();
                     analyzePath();
+                    showLoading(false); // Hide loading indicator after placement
                 } else if (confirm('Reset and place new transmitter at this location?')) {
                     map.removeLayer(txMarker);
                     map.removeLayer(rxMarker);
@@ -163,7 +174,7 @@ function updatePlacementMode(mode) {
                     receiver = null;
                     txMarker = L.marker(transmitter, { 
                         icon: L.icon({
-                            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIiaGVpZ2h0PSIxMCI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJibHVlIi8+PC9zdmc+',
+                            iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJibHVlIi8+PC9zdmc+',
                             iconSize: [10, 10],
                             iconAnchor: [5, 5],
                             popupAnchor: [0, -5]
@@ -175,8 +186,10 @@ function updatePlacementMode(mode) {
                     rxMarker = null;
                     updatePolyline();
                     updateAtmosphericConditions();
+                    showLoading(false); // Hide loading indicator after placement
                 } else {
                     console.log('Click canceled by user');
+                    showLoading(false); // Hide loading indicator if canceled
                 }
             });
         } else {
@@ -313,7 +326,7 @@ async function placeFromCoords(type) {
         receiver = latLng;
         rxMarker = L.marker(receiver, { 
             icon: L.icon({
-                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJyZWQiLz4+PC9zdmc+',
+                iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGViZ2h0PSIxMCI+PHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBmaWxsPSJyZWQiLz4+PC9zdmc+',
                 iconSize: [10, 10],
                 iconAnchor: [5, 5],
                 popupAnchor: [0, -5]
@@ -350,7 +363,16 @@ async function getSingleElevation(latlng) {
         const response = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${latlng.lat},${latlng.lng}`);
         const data = await response.json();
         if (data.results && data.results.length > 0 && data.results[0].elevation !== undefined) {
-            return data.results[0].elevation.toFixed(1);
+            const elevation = data.results[0].elevation.toFixed(1);
+            console.log('Elevation fetched:', { latlng, elevation });
+            if (!transmitter) {
+                transmitterGroundElevation = parseFloat(elevation);
+                console.log('Set transmitterGroundElevation:', transmitterGroundElevation);
+            } else if (!receiver) {
+                receiverGroundElevation = parseFloat(elevation);
+                console.log('Set receiverGroundElevation:', receiverGroundElevation);
+            }
+            return elevation;
         }
         return 'N/A';
     } catch (error) {
@@ -572,6 +594,11 @@ async function analyzePath() {
             if (elevationChart) elevationChart.destroy();
             linkStatus = 'Error';
         } else {
+            console.log('Ground Elevations:', {
+                transmitterGroundElevation: transmitterGroundElevation || 0,
+                receiverGroundElevation: receiverGroundElevation || 0
+            });
+            console.log('Chart Data - Elevations:', elevations);
             const canvas = document.getElementById('elevation-profile');
             if (elevationChart) elevationChart.destroy();
 
@@ -605,7 +632,11 @@ async function analyzePath() {
                                 const wavelength = 3e8 / frequency;
                                 const { txHeight, rxHeight } = getAntennaHeights();
                                 const fresnelRadius = Math.sqrt((wavelength * d1 * d2) / totalDistance);
-                                return Math.min(txHeight, rxHeight) + fresnelRadius;
+                                const txGround = transmitterGroundElevation || 0;
+                                const rxGround = receiverGroundElevation || 0;
+                                const txClearance = txGround + txHeight + fresnelRadius;
+                                const rxClearance = rxGround + rxHeight + fresnelRadius;
+                                return Math.min(txClearance, rxClearance);
                             }),
                             borderColor: 'purple',
                             fill: false,
@@ -680,6 +711,15 @@ function calculateRF(totalDistance, elevations) {
     const terrainType = document.getElementById('terrainType').value;
     const { humidity, temperature, pressure } = atmosphericData;
 
+    console.log('Calculating RF Link Budget:', {
+        frequency: frequency / 1e6 + ' MHz',
+        totalDistance: totalDistance + ' m',
+        txHeight, rxHeight,
+        txPower, rxSensitivity,
+        txAntennaGain, rxAntennaGain,
+        terrainType, atmosphericData
+    });
+
     if (isNaN(frequency) || isNaN(totalDistance) || isNaN(txHeight) || isNaN(rxHeight) || 
         isNaN(txPower) || isNaN(rxSensitivity) || isNaN(txAntennaGain) || isNaN(rxAntennaGain) || 
         isNaN(humidity) || isNaN(temperature) || isNaN(pressure) || elevations.length === 0) {
@@ -687,6 +727,7 @@ function calculateRF(totalDistance, elevations) {
     }
 
     const fspl = 20 * Math.log10(totalDistance) + 20 * Math.log10(frequency) + 20 * Math.log10(4 * Math.PI / 3e8);
+    console.log('FSPL:', fspl.toFixed(2) + ' dB');
 
     let terrainLoss = 0;
     switch (terrainType) {
@@ -697,6 +738,7 @@ function calculateRF(totalDistance, elevations) {
         default: terrainLoss = 0;
     }
     terrainLoss *= (totalDistance / 1000);
+    console.log('Terrain Loss:', terrainLoss.toFixed(2) + ' dB');
 
     let atmosphericLoss = 0;
     if (frequency / 1e6 <= 30) {
@@ -707,29 +749,45 @@ function calculateRF(totalDistance, elevations) {
         const pressureFactor = (pressure - 1013) * 0.001 * (totalDistance / 1000);
         atmosphericLoss = humidityFactor + tempFactor + pressureFactor;
     }
+    console.log('Atmospheric Loss:', atmosphericLoss.toFixed(2) + ' dB');
 
     const maxElevation = Math.max(...elevations.map(e => e.height || 0));
-    const heightDiff = maxElevation - (txHeight + rxHeight) / 2;
+    const heightDiff = maxElevation - ((transmitterGroundElevation || 0) + txHeight + (receiverGroundElevation || 0) + rxHeight) / 2;
     let diffractionLoss = 0;
     const wavelength = 3e8 / frequency;
     if (heightDiff > 0 && !isNaN(wavelength) && wavelength > 0) {
         diffractionLoss = 6.9 + 20 * Math.log10(Math.sqrt((heightDiff * heightDiff) / (wavelength * wavelength)));
     }
+    console.log('Diffraction Loss:', diffractionLoss.toFixed(2) + ' dB');
 
     const isClear = elevations.every(elevation => {
         const d1 = elevation.distance;
         const d2 = totalDistance - d1;
         const fresnelRadius = Math.sqrt((wavelength * d1 * d2) / totalDistance);
-        return elevation.height <= (Math.min(txHeight, rxHeight) + fresnelRadius);
+        const txGround = transmitterGroundElevation || 0;
+        const rxGround = receiverGroundElevation || 0;
+        const txClearance = txGround + txHeight + fresnelRadius;
+        const rxClearance = rxGround + rxHeight + fresnelRadius;
+        const clearance = Math.min(txClearance, rxClearance);
+        console.log('Fresnel Check at', d1.toFixed(2) + ' m:', {
+            elevation: elevation.height.toFixed(2) + ' m',
+            fresnelRadius: fresnelRadius.toFixed(2) + ' m',
+            clearance: clearance.toFixed(2) + ' m',
+            isClear: elevation.height <= clearance
+        });
+        return elevation.height <= clearance;
     });
+    console.log('Fresnel Zone Clear:', isClear);
 
     const effectiveTxPower = txPower + txAntennaGain;
     const totalLoss = fspl + terrainLoss + atmosphericLoss + diffractionLoss;
     const receivedPower = effectiveTxPower - totalLoss + rxAntennaGain;
-    const snr = receivedPower;
-    const fadeMargin = 15;
+    console.log('Effective Tx Power:', effectiveTxPower.toFixed(2) + ' dBm');
+    console.log('Total Loss:', totalLoss.toFixed(2) + ' dB');
+    console.log('Received Power:', receivedPower.toFixed(2) + ' dBm');
 
     let linkStatus = '';
+    const fadeMargin = 15;
     if (receivedPower >= rxSensitivity + fadeMargin) {
         linkStatus = 'Link will work';
     } else if (receivedPower >= rxSensitivity) {
@@ -765,7 +823,7 @@ function calculateRF(totalDistance, elevations) {
             <tr><td>Received Power</td><td>${receivedPower.toFixed(1)} dBm</td></tr>
             <tr><td>Rx Antenna Gain</td><td>${rxAntennaGain.toFixed(1)} dBi</td></tr>
             <tr><td>Receiver Sensitivity</td><td>${rxSensitivity} dBm</td></tr>
-            <tr><td>SNR</td><td>${snr.toFixed(1)} dB</td></tr>
+            <tr><td>SNR</td><td>${receivedPower.toFixed(1)} dB</td></tr>
             <tr><td>Fade Margin</td><td>${fadeMargin} dB</td></tr>
             <tr><td>Max Allowable Loss</td><td>${maxAllowableLoss.toFixed(1)} dB</td></tr>
             <tr><td>Link Status</td><td>${linkStatus}</td></tr>
@@ -783,15 +841,17 @@ function visualizeFresnelZone(totalDistance, elevations) {
     const frequency = getFrequency();
     const wavelength = 3e8 / frequency;
     const { txHeight, rxHeight } = getAntennaHeights();
-    if (isNaN(frequency) || isNaN(totalDistance) || isNaN(txHeight) || isNaN(rxHeight) || elevations.length === 0 || isNaN(wavelength) || wavelength <= 0) {
-        document.getElementById('fresnel-zone').style.display = 'none';
-        return;
-    }
+    console.log('Visualizing Fresnel Zone:', {
+        frequency: frequency / 1e6 + ' MHz',
+        totalDistance: totalDistance + ' m',
+        txHeight, rxHeight,
+        wavelength: wavelength.toFixed(2) + ' m'
+    });
 
     let svgContent = '';
     let isObstructed = false;
 
-    const maxHeight = Math.max(...elevations.map(e => e.height), txHeight, rxHeight) + 10;
+    const maxHeight = Math.max(...elevations.map(e => e.height), (transmitterGroundElevation || 0) + txHeight, (receiverGroundElevation || 0) + rxHeight) + 10;
     const heightScale = 150 / maxHeight;
 
     let terrainPath = '';
@@ -805,15 +865,20 @@ function visualizeFresnelZone(totalDistance, elevations) {
     const d1 = totalDistance / 2;
     const d2 = totalDistance - d1;
     const fresnelRadius = Math.sqrt((wavelength * d1 * d2) / totalDistance);
+    const txGround = transmitterGroundElevation || 0;
+    const rxGround = receiverGroundElevation || 0;
+    const txClearance = txGround + txHeight + fresnelRadius;
+    const rxClearance = rxGround + rxHeight + fresnelRadius;
+    const clearance = Math.min(txClearance, rxClearance);
     const ellipseHeight = fresnelRadius * heightScale * 2;
-    const ellipseY = 150 - (Math.min(txHeight, rxHeight) + fresnelRadius) * heightScale;
+    const ellipseY = 150 - (clearance * heightScale);
     svgContent += `
         <ellipse cx="50%" cy="${ellipseY}" rx="50%" ry="${ellipseHeight / 2}" stroke="black" stroke-width="1" fill="none" />
         <text class="fresnel-label" x="50%" y="${ellipseY - 10}" text-anchor="middle">n=1</text>
     `;
 
     svgContent += `
-        <line x1="0%" y1="${150 - txHeight * heightScale}" x2="100%" y2="${150 - rxHeight * heightScale}" stroke="blue" stroke-width="1" />
+        <line x1="0%" y1="${150 - (txGround + txHeight) * heightScale}" x2="100%" y2="${150 - (rxGround + rxHeight) * heightScale}" stroke="blue" stroke-width="1" />
     `;
 
     svgContent += `<path d="${terrainPath}" fill="none" stroke="gray" stroke-width="2" />`;
@@ -838,12 +903,21 @@ function visualizeFresnelZone(totalDistance, elevations) {
         const d1 = elevation.distance;
         const d2 = totalDistance - d1;
         const fresnelRadiusP = Math.sqrt((wavelength * d1 * d2) / totalDistance);
-        if (elevation.height > Math.min(txHeight, rxHeight) + fresnelRadiusP) {
+        const txGround = transmitterGroundElevation || 0;
+        const rxGround = receiverGroundElevation || 0;
+        const txClearance = txGround + txHeight + fresnelRadiusP;
+        const rxClearance = rxGround + rxHeight + fresnelRadiusP;
+        const clearance = Math.min(txClearance, rxClearance);
+        if (elevation.height > clearance) {
             isObstructed = true;
-            const x = (elevation.distance / totalDistance) * 100;
-            const y = 150 - (elevation.height * heightScale);
-            svgContent += `<circle cx="${x}%" cy="${y}" r="3" fill="red" />`;
-
+            console.log('Obstruction detected at:', {
+                distance: d1.toFixed(2) + ' m',
+                elevation: elevation.height.toFixed(2) + ' m',
+                fresnelRadius: fresnelRadiusP.toFixed(2) + ' m',
+                clearance: clearance.toFixed(2) + ' m',
+                txGround: txGround.toFixed(2) + ' m',
+                rxGround: rxGround.toFixed(2) + ' m'
+            });
             // Create a red box around the obstruction on the map
             // Use a small buffer around the point (e.g., 0.0005 degrees lat/lon ~50m at this scale)
             const lat = elevation.lat;
@@ -949,7 +1023,12 @@ async function suggestRelaySites() {
             const d1 = elevation.distance;
             const d2 = totalDistance - d1;
             const fresnelRadius = Math.sqrt((wavelength * d1 * d2) / totalDistance);
-            if (elevation.height > Math.min(txHeight, rxHeight) + fresnelRadius && elevation.height > maxObstruction.height) {
+            const txGround = transmitterGroundElevation || 0;
+            const rxGround = receiverGroundElevation || 0;
+            const txClearance = txGround + txHeight + fresnelRadius;
+            const rxClearance = rxGround + rxHeight + fresnelRadius;
+            const clearance = Math.min(txClearance, rxClearance);
+            if (elevation.height > clearance && elevation.height > maxObstruction.height) {
                 maxObstruction = { height: elevation.height, distance: d1 };
             }
         });
@@ -1051,6 +1130,7 @@ function updateRelayPath(relaySites) {
 
 // Show loading indicator
 function showLoading(show) {
+    console.log(`Showing loading: ${show ? 'true' : 'false'}`);
     document.getElementById('loading').style.display = show ? 'block' : 'none';
     if (!show) {
         const resultDiv = document.getElementById('result');
@@ -1088,6 +1168,8 @@ function updatePolyline(color) {
 function resetLink() {
     transmitter = null;
     receiver = null;
+    transmitterGroundElevation = 0; // Reset Tx ground elevation
+    receiverGroundElevation = 0;    // Reset Rx ground elevation
     if (txMarker) map.removeLayer(txMarker);
     if (rxMarker) map.removeLayer(rxMarker);
     if (polylineLayer) map.removeLayer(polylineLayer);
@@ -1155,7 +1237,9 @@ function savePath() {
             hfAntennaHeight: document.getElementById('hfAntennaHeight').value || '5',
             hfTime: document.getElementById('hfTime').value || 'day',
             hfSolarActivity: document.getElementById('hfSolarActivity').value || 'medium',
-            atmosphericData: atmosphericData
+            atmosphericData: atmosphericData,
+            transmitterGroundElevation: transmitterGroundElevation,
+            receiverGroundElevation: receiverGroundElevation
         };
         localStorage.setItem('rfPath', JSON.stringify(pathData));
         alert('Path saved successfully!');
@@ -1194,6 +1278,8 @@ function loadPath() {
         document.getElementById('hfTime').value = pathData.hfTime || 'day';
         document.getElementById('hfSolarActivity').value = pathData.hfSolarActivity || 'medium';
         atmosphericData = pathData.atmosphericData || { humidity: 50, temperature: 15, pressure: 1013 };
+        transmitterGroundElevation = pathData.transmitterGroundElevation || 0;
+        receiverGroundElevation = pathData.receiverGroundElevation || 0;
         lastAtmosphericUpdate = 0;
         updateAtmosphericStatus();
 
