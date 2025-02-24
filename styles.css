@@ -1,269 +1,210 @@
-body {
-    font-family: Arial, sans-serif;
+* {
     margin: 0;
     padding: 0;
+    box-sizing: border-box;
+    font-family: 'Arial', sans-serif;
 }
 
-#map {
-    width: 100%;
+body {
+    background-color: #f0f2f5;
+    color: #333;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+h1 {
+    font-size: 2em;
+    color: #2c3e50;
+}
+
+h2 {
+    font-size: 1.2em;
+    color: #34495e;
+    margin-bottom: 10px;
 }
 
 .controls {
-    padding: 10px;
-    background-color: #f0f0f0;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: center;
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
 }
 
-.input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+.control-group {
+    margin-bottom: 20px;
 }
 
-.input-group label {
-    font-weight: bold;
+.control-group label {
+    margin-right: 10px;
     font-size: 0.9em;
+    color: #34495e;
+}
+
+.param-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 10px;
+}
+
+.param {
     display: flex;
     align-items: center;
     gap: 5px;
 }
 
-.input-group input, .controls select, .controls button {
-    padding: 5px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    transition: border-color 0.3s;
-}
-
-.search-group {
-    flex-direction: row;
-    align-items: center;
-}
-
-.search-group input {
-    flex: 1;
-    margin-right: 5px;
-}
-
-.input-group input.invalid, .controls select.invalid, .controls button.invalid {
-    border-color: red;
-}
-
-.tooltip {
-    cursor: help;
-    font-size: 0.7em;
-    color: #666;
-}
-
-.tooltip:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    background: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 0.8em;
-    z-index: 1000;
+.param label {
     white-space: nowrap;
 }
 
-.loading {
-    padding: 5px;
-    color: #666;
-    font-style: italic;
-}
-
-.elevation-container, .result, .fresnel-zone, .hf-analysis {
-    padding: 10px;
-    margin: 10px;
-    border: 1px solid #ccc;
+input[type="text"],
+input[type="number"],
+select {
+    padding: 8px;
+    border: 1px solid #ddd;
     border-radius: 4px;
+    width: 100px; /* Fixed width for consistency */
+    font-size: 0.9em;
+}
+
+button {
+    padding: 8px 16px;
+    background-color: #3498db;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin: 5px 5px 0 0;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+#map {
+    height: 400px;
     width: 100%;
-    box-sizing: border-box;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
 }
 
-#elevation-profile {
-    max-height: 300px;
-    width: 100% !important;
+#loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 4px;
+    z-index: 1000;
 }
 
-#elevation-text {
-    max-height: 300px;
+#result {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    max-height: 200px;
     overflow-y: auto;
 }
 
-.result table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-}
-
-.result th, .result td {
-    border: 1px solid #ccc;
-    padding: 5px;
-    text-align: left;
-}
-
-.fresnel-zone {
-    background-color: rgba(255, 0, 0, 0.1);
-    border-color: #ff0000;
-    max-height: 200px;
-    overflow: auto;
-    position: relative;
-}
-
-.fresnel-clear {
-    background-color: rgba(0, 255, 0, 0.1);
-    border-color: #00ff00;
-}
-
-.polyline-green {
-    color: green !important;
-}
-
-.polyline-amber {
-    color: #ffcc00 !important;
-}
-
-.polyline-red {
-    color: red !important;
-}
-
-.polyline-gray {
-    color: gray !important;
-}
-
-.leaflet-marker-icon.blue-dot {
-    background-color: blue;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid blue;
-    margin-left: -5px;
-    margin-top: -5px;
-}
-
-.leaflet-marker-icon.red-dot {
-    background-color: red;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid red;
-    margin-left: -5px;
-    margin-top: -5px;
-}
-
-.leaflet-marker-icon.relay-dot { /* New relay marker style */
-    background-color: purple;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid purple;
-    margin-left: -5px;
-    margin-top: -5px;
-}
-
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1001;
-}
-
-.modal-content {
-    background-color: white;
-    margin: 15% auto;
+#elevation-container {
+    background: #fff;
     padding: 20px;
-    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+#elevation-profile {
+    height: 200px;
+}
+
+#fresnel-zone {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+#atmospheric-status {
+    background: #ecf0f1;
+    padding: 10px;
     border-radius: 4px;
-    width: 80%;
-    max-width: 500px;
-    position: relative;
-}
-
-.close {
-    color: #aaa;
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.close:hover,
-.close:focus {
-    color: black;
-    text-decoration: none;
-}
-
-.fresnel-label {
-    position: absolute;
-    font-size: 10px;
-    color: black;
-    background: white;
-    padding: 2px;
-    border-radius: 2px;
-}
-
-.distance-label {
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 2px 5px;
-    font-size: 12px;
-    color: #333;
+    font-size: 0.9em;
+    color: #7f8c8d;
     text-align: center;
 }
 
-#coord-group input {
-    width: 100px;
+.help-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #e74c3c;
 }
 
-#coord-group div {
-    display: flex;
-    gap: 5px;
-    align-items: center;
+#help-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
 }
 
-@media (max-width: 768px) {
+.polyline-green { stroke: #27ae60; }
+.polyline-amber { stroke: #f39c12; }
+.polyline-red { stroke: #c0392b; }
+.polyline-gray { stroke: #7f8c8d; }
+
+/* Responsive tweaks */
+@media (max-width: 600px) {
     .controls {
+        padding: 10px;
+    }
+
+    .param-row {
         flex-direction: column;
-        align-items: flex-start;
+        gap: 10px;
     }
-    .input-group, .controls button, .controls select, .search-group {
-        width: 100%;
-        margin-bottom: 5px;
-    }
-    .search-group {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .search-group input {
-        margin-right: 0;
-        margin-bottom: 5px;
+
+    .param {
         width: 100%;
     }
-    #map, .elevation-container, .result, .fresnel-zone, .hf-analysis {
+
+    input[type="text"],
+    input[type="number"],
+    select {
         width: 100%;
-        box-sizing: border-box;
+        max-width: none;
     }
-    .modal-content {
-        margin: 20% auto;
-        width: 90%;
-    }
-    #coord-group div {
-        flex-direction: column;
+
+    button {
         width: 100%;
+        margin: 5px 0;
     }
-    #coord-group input {
-        width: 100%;
+
+    #map {
+        height: 300px;
     }
 }
