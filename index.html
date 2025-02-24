@@ -15,6 +15,7 @@
             <label>Placement Mode:</label>
             <label><input type="radio" name="placementMode" value="click" checked onchange="updatePlacementMode(this.value)"> Click on Map</label>
             <label><input type="radio" name="placementMode" value="bng" onchange="updatePlacementMode(this.value)"> Enter BNG</label>
+            <label><input type="radio" name="placementMode" value="coords" onchange="updatePlacementMode(this.value)"> Enter Coordinates</label>
         </div>
         <div class="input-group" id="bng-group" style="display: none;">
             <label for="txBNG">Transmitter BNG (e.g., TQ123456):</label>
@@ -23,6 +24,20 @@
             <label for="rxBNG">Receiver BNG (e.g., TQ123456):</label>
             <input type="text" id="rxBNG" placeholder="e.g., TQ123456">
             <button onclick="placeFromBNG('receiver')">Place Receiver</button>
+        </div>
+        <div class="input-group" id="coord-group" style="display: none;">
+            <label>Transmitter Coordinates:</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="txLat" placeholder="Lat" step="0.0001">
+                <input type="number" id="txLng" placeholder="Lon" step="0.0001">
+                <button onclick="placeFromCoords('transmitter')">Place Transmitter</button>
+            </div>
+            <label>Receiver Coordinates:</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="number" id="rxLat" placeholder="Lat" step="0.0001">
+                <input type="number" id="rxLng" placeholder="Lon" step="0.0001">
+                <button onclick="placeFromCoords('receiver')">Place Receiver</button>
+            </div>
         </div>
         <div class="input-group search-group">
             <label for="locationSearch">Search Location:</label>
@@ -42,7 +57,7 @@
             <input type="number" id="rxHeight" placeholder="e.g., 5" step="0.1" value="5">
         </div>
         <div class="input-group">
-            <label for "txPower">Transmitter Power (W): <span class="tooltip" data-tooltip="Transmit power in watts (e.g., 1 W = 30 dBm)">ⓘ</span></label>
+            <label for="txPower">Transmitter Power (W): <span class="tooltip" data-tooltip="Transmit power in watts (e.g., 1 W = 30 dBm)">ⓘ</span></label>
             <input type="number" id="txPower" placeholder="e.g., 1" step="0.01" value="1">
         </div>
         <div class="input-group">
@@ -127,38 +142,28 @@
         <div class="modal-content">
             <span class="close" onclick="closeHelp()">×</span>
             <h2>RF Path Analyzer Help</h2>
-            <p>This tool helps plan RF links for frequencies between 30–87.975 MHz (VHF) and 225–450 MHz (UHF), and now includes HF (3–30 MHz) analysis for skywave propagation.</p>
+            <p>This tool helps plan RF links for frequencies between 30–87.975 MHz (VHF) and 225–450 MHz (UHF), and includes HF (3–30 MHz) analysis for skywave propagation.</p>
             <ul>
-                <li>Choose placement mode: Click on the map, enter British National Grid (BNG) references (e.g., TQ123456), or use the search to find a location.</li>
-                <li>Click the map to place markers (if in Click mode), enter BNG references and click “Place” buttons (if in BNG mode), or use the search to center the map on a location.</li>
-                <li>For VHF/UHF: Enter frequency, heights, power (in watts), antenna gains, and terrain type, then click “Analyze Path” to see the link budget, elevation profile, and Fresnel zone clearance. Atmospheric conditions are automatically updated from weather data.</li>
-                <li>For HF: Click “HF Analysis” to access HF-specific analysis, enter frequency, antenna height, time of day, and solar activity, then click “Analyze HF” to see minimum effective height and working frequencies.</li>
-                <li>Use the map layer dropdown to switch between Street View and Satellite View.</li>
-                <li>Use “Reset Link” to clear all data, “Save Path”/“Load Path” to store configurations, and “Export/Import Data” for reports.</li>
+                <li>Choose placement mode: Click on the map, enter British National Grid (BNG) references (e.g., TQ123456), or use lat/lng coordinates.</li>
+                <li>Click the map, enter BNG, or input coordinates to place markers.</li>
+                <li>For VHF/UHF: Enter frequency, heights, power, antenna gains, and terrain type, then click “Analyze Path”.</li>
+                <li>For HF: Click “HF Analysis” to access HF-specific analysis.</li>
+                <li>Use “Reset Link” to clear, “Save Path”/“Load Path” to store, and “Export/Import Data” for reports.</li>
             </ul>
-            <p><strong>Notes:</strong> Ensure internet access for elevation data, satellite imagery, BNG conversion, location search, and atmospheric updates. Transmitter power is input in watts and converted internally to dBm (1 W = 30 dBm). BNG references should be in the format of a two-letter square (e.g., TQ) followed by 6 or 8 digits (easting/northing). HF analysis uses simplified models for skywave propagation; results are approximate and depend on ionospheric conditions. Contact support if issues persist.</p>
+            <p><strong>Notes:</strong> Ensure internet access for elevation data and weather updates. Replace YOUR_API_KEY with a valid OpenWeatherMap API key.</p>
         </div>
     </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script> <!-- Use UMD version for broader compatibility -->
-    <script src="https://nominatim.openstreetmap.org/ui/common.js"></script> <!-- For snap-to-road and search -->
-    <script src="https://api.openweathermap.org/data/2.5/weather?appid=YOUR_API_KEY&units=metric"></script> <!-- For weather data, replace YOUR_API_KEY -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://nominatim.openstreetmap.org/ui/common.js"></script>
+    <script src="https://api.openweathermap.org/data/2.5/weather?appid=YOUR_API_KEY&units=metric"></script>
     <script>
-        // Fallback if CDN fails
         if (typeof Chart === 'undefined') {
-            console.warn('Chart.js not loaded from CDN, attempting local fallback...');
-            const script = document.createElement('script');
-            script.src = 'chart.js'; // Assuming you download and host chart.umd.min.js locally
-            script.async = true;
-            script.onload = () => console.log('Chart.js loaded locally');
-            script.onerror = () => console.error('Failed to load Chart.js locally');
-            document.body.appendChild(script);
+            console.warn('Chart.js not loaded from CDN.');
         }
-
-        // Fallback if Leaflet.js fails
         if (typeof L === 'undefined') {
-            console.error('Leaflet.js not loaded. Map will not function.');
-            document.getElementById('map').innerHTML = '<p>Error: Map library failed to load. Check internet connection or script sources.</p>';
+            console.error('Leaflet.js not loaded.');
+            document.getElementById('map').innerHTML = '<p>Error: Map library failed to load.</p>';
         }
     </script>
     <script src="script.js"></script>
