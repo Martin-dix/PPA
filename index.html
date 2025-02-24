@@ -5,168 +5,135 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RF Path Analyzer</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.min.css" />
     <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div id="map" style="height: 50vh;"></div>
-    <div class="controls">
-        <div class="input-group">
-            <label>Placement Mode:</label>
-            <label><input type="radio" name="placementMode" value="click" checked onchange="updatePlacementMode(this.value)"> Click on Map</label>
-            <label><input type="radio" name="placementMode" value="bng" onchange="updatePlacementMode(this.value)"> Enter BNG</label>
-            <label><input type="radio" name="placementMode" value="coords" onchange="updatePlacementMode(this.value)"> Enter Coordinates</label>
-        </div>
-        <div class="input-group" id="bng-group" style="display: none;">
-            <label for="txBNG">Transmitter BNG (e.g., TQ123456):</label>
-            <input type="text" id="txBNG" placeholder="e.g., TQ123456">
-            <button onclick="placeFromBNG('transmitter')">Place Transmitter</button>
-            <label for="rxBNG">Receiver BNG (e.g., TQ123456):</label>
-            <input type="text" id="rxBNG" placeholder="e.g., TQ123456">
-            <button onclick="placeFromBNG('receiver')">Place Receiver</button>
-        </div>
-        <div class="input-group" id="coord-group" style="display: none;">
-            <label>Transmitter Coordinates:</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="number" id="txLat" placeholder="Lat" step="0.0001">
-                <input type="number" id="txLng" placeholder="Lon" step="0.0001">
-                <button onclick="placeFromCoords('transmitter')">Place Transmitter</button>
+    <div class="container">
+        <header>
+            <h1>RF Path Analyzer</h1>
+        </header>
+        <section class="controls">
+            <div class="control-group">
+                <h2>Placement Mode</h2>
+                <label><input type="radio" name="placementMode" value="click" checked onchange="console.log('Placement mode changed to: click')"> Click</label>
+                <label><input type="radio" name="placementMode" value="bng" onchange="console.log('Placement mode changed to: bng')"> BNG</label>
+                <label><input type="radio" name="placementMode" value="coords" onchange="console.log('Placement mode changed to: coords')"> Coordinates</label>
+                <div id="bng-group" style="display: none;">
+                    <label for="txBNG">Transmitter BNG:</label>
+                    <input type="text" id="txBNG" placeholder="e.g., TQ123456">
+                    <button onclick="placeFromBNG('transmitter')">Place Tx</button>
+                    <label for="rxBNG">Receiver BNG:</label>
+                    <input type="text" id="rxBNG" placeholder="e.g., TQ123456">
+                    <button onclick="placeFromBNG('receiver')">Place Rx</button>
+                </div>
+                <div id="coord-group" style="display: none;">
+                    <label for="txLat">Tx Latitude:</label>
+                    <input type="number" id="txLat" placeholder="e.g., 51.505" step="0.0001">
+                    <label for="txLng">Tx Longitude:</label>
+                    <input type="number" id="txLng" placeholder="e.g., -0.09" step="0.0001">
+                    <button onclick="placeFromCoords('transmitter')">Place Tx</button>
+                    <label for="rxLat">Rx Latitude:</label>
+                    <input type="number" id="rxLat" placeholder="e.g., 51.515" step="0.0001">
+                    <label for="rxLng">Rx Longitude:</label>
+                    <input type="number" id="rxLng" placeholder="e.g., -0.08" step="0.0001">
+                    <button onclick="placeFromCoords('receiver')">Place Rx</button>
+                </div>
             </div>
-            <label>Receiver Coordinates:</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="number" id="rxLat" placeholder="Lat" step="0.0001">
-                <input type="number" id="rxLng" placeholder="Lon" step="0.0001">
-                <button onclick="placeFromCoords('receiver')">Place Receiver</button>
+            <div class="control-group">
+                <h2>Link Parameters</h2>
+                <div class="param-row">
+                    <div class="param">
+                        <label for="frequency">Frequency (MHz):</label>
+                        <input type="number" id="frequency" value="30">
+                    </div>
+                    <div class="param">
+                        <label for="txHeight">Tx Height (m):</label>
+                        <input type="number" id="txHeight" value="5">
+                    </div>
+                    <div class="param">
+                        <label for="rxHeight">Rx Height (m):</label>
+                        <input type="number" id="rxHeight" value="5">
+                    </div>
+                </div>
+                <div class="param-row">
+                    <div class="param">
+                        <label for="txPower">Tx Power (W):</label>
+                        <input type="number" id="txPower" value="1">
+                    </div>
+                    <div class="param">
+                        <label for="rxSensitivity">Rx Sensitivity (dBm):</label>
+                        <input type="number" id="rxSensitivity" value="-90">
+                    </div>
+                    <div class="param">
+                        <label for="txAntennaGain">Tx Gain (dBi):</label>
+                        <input type="number" id="txAntennaGain" value="0">
+                    </div>
+                </div>
+                <div class="param-row">
+                    <div class="param">
+                        <label for="rxAntennaGain">Rx Gain (dBi):</label>
+                        <input type="number" id="rxAntennaGain" value="0">
+                    </div>
+                    <div class="param">
+                        <label for="terrainType">Terrain Type:</label>
+                        <select id="terrainType">
+                            <option value="open">Open</option>
+                            <option value="hilly">Hilly</option>
+                            <option value="urban">Urban</option>
+                            <option value="forest">Forest</option>
+                        </select>
+                    </div>
+                    <div class="param">
+                        <label for="pathGranularity">Path Granularity:</label>
+                        <select id="pathGranularity">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="input-group search-group">
-            <label for="locationSearch">Search Location:</label>
-            <input type="text" id="locationSearch" placeholder="e.g., London, UK or TQ123456">
-            <button onclick="searchLocation()">Search</button>
-        </div>
-        <div class="input-group">
-            <label for="frequency">Frequency (MHz, 30-87.975 or 225-450): <span class="tooltip" data-tooltip="Enter frequency in MHz (e.g., 50 for VHF or 300 for UHF)">ⓘ</span></label>
-            <input type="number" id="frequency" placeholder="e.g., 50" step="0.1" value="30">
-        </div>
-        <div class="input-group">
-            <label for="txHeight">Transmitter Height (m): <span class="tooltip" data-tooltip="Height above ground level (e.g., 5m)">ⓘ</span></label>
-            <input type="number" id="txHeight" placeholder="e.g., 5" step="0.1" value="5">
-        </div>
-        <div class="input-group">
-            <label for="rxHeight">Receiver Height (m): <span class="tooltip" data-tooltip="Height above ground level (e.g., 5m)">ⓘ</span></label>
-            <input type="number" id="rxHeight" placeholder="e.g., 5" step="0.1" value="5">
-        </div>
-        <div class="input-group">
-            <label for="txPower">Transmitter Power (W): <span class="tooltip" data-tooltip="Transmit power in watts (e.g., 1 W = 30 dBm)">ⓘ</span></label>
-            <input type="number" id="txPower" placeholder="e.g., 1" step="0.01" value="1">
-        </div>
-        <div class="input-group">
-            <label for="rxSensitivity">Receiver Sensitivity (dBm): <span class="tooltip" data-tooltip="Minimum receivable power in dBm (e.g., -90 dBm)">ⓘ</span></label>
-            <input type="number" id="rxSensitivity" placeholder="e.g., -90" step="0.1" value="-90">
-        </div>
-        <div class="input-group">
-            <label for="txAntennaGain">Tx Antenna Gain (dBi): <span class="tooltip" data-tooltip="Gain of the transmitter antenna (e.g., 0 for omnidirectional, 10 for directional)">ⓘ</span></label>
-            <input type="number" id="txAntennaGain" placeholder="e.g., 0" step="0.1" value="0">
-        </div>
-        <div class="input-group">
-            <label for="rxAntennaGain">Rx Antenna Gain (dBi): <span class="tooltip" data-tooltip="Gain of the receiver antenna (e.g., 0 for omnidirectional, 10 for directional)">ⓘ</span></label>
-            <input type="number" id="rxAntennaGain" placeholder="e.g., 0" step="0.1" value="0">
-        </div>
-        <div class="input-group">
-            <label for="terrainType">Terrain Type: <span class="tooltip" data-tooltip="Select terrain to adjust for diffraction and clutter losses">ⓘ</span></label>
-            <select id="terrainType">
-                <option value="open">Flat, Open</option>
-                <option value="hilly">Hilly</option>
-                <option value="urban">Urban</option>
-                <option value="forest">Forest</option>
-            </select>
-        </div>
-        <button onclick="updateAtmosphericConditions()">Update Atmospheric Conditions</button>
-        <div class="input-group">
-            <label>Path Granularity: <span class="tooltip" data-tooltip="Select resolution for elevation profile (Low: 10 points, Medium: 50 points, High: 100 points)">ⓘ</span></label>
-            <select id="pathGranularity">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-            </select>
-        </div>
-        <button onclick="analyzePath()">Analyze Path</button>
-        <button onclick="suggestRelaySites()">Suggest Relay Sites</button> <!-- New Button -->
-        <button onclick="savePath()">Save Path</button>
-        <button onclick="loadPath()">Load Path</button>
-        <button onclick="resetLink()">Reset Link</button>
-        <button onclick="exportData()">Export Data</button>
-        <button onclick="importData()">Import Data</button>
-        <button onclick="showHFAnalysis()">HF Analysis</button>
-        <select id="map-layer" onchange="changeMapLayer(this.value)">
-            <option value="street">Street View</option>
-            <option value="satellite">Satellite View</option>
-        </select>
-        <div id="loading" class="loading" style="display: none;">Loading...</div>
-        <div id="atmospheric-status" class="result" style="display: none;"></div>
-    </div>
-    <div id="elevation-container" class="elevation-profile">
-        <canvas id="elevation-profile" style="display: block;"></canvas>
-        <div id="elevation-text" style="display: none;"></div>
-    </div>
-    <div id="result" class="result"></div>
-    <div id="fresnel-zone" class="fresnel-zone" style="display: none;"></div>
-    <div id="hf-analysis" class="hf-analysis" style="display: none;">
-        <h3>HF Analysis</h3>
-        <div class="input-group">
-            <label for="hfFrequency">HF Frequency (MHz, 3–30): <span class="tooltip" data-tooltip="Enter frequency in MHz for HF skywave propagation (e.g., 7 for 40m band)">ⓘ</span></label>
-            <input type="number" id="hfFrequency" placeholder="e.g., 7" step="0.1" min="3" max="30" value="7">
-        </div>
-        <div class="input-group">
-            <label for="hfAntennaHeight">Antenna Height (m): <span class="tooltip" data-tooltip="Height above ground for HF antenna (defaults to transmitter height)">ⓘ</span></label>
-            <input type="number" id="hfAntennaHeight" placeholder="e.g., 5" step="0.1" value="5">
-        </div>
-        <div class="input-group">
-            <label for="hfTime">Time of Day: <span class="tooltip" data-tooltip="Select time for ionospheric conditions (affects MUF/LUF)">ⓘ</span></label>
-            <select id="hfTime">
-                <option value="day">Day (10:00 UTC)</option>
-                <option value="night">Night (02:00 UTC)</option>
-            </select>
-        </div>
-        <div class="input-group">
-            <label for="hfSolarActivity">Solar Activity: <span class="tooltip" data-tooltip="Approximate solar activity level (affects MUF)">ⓘ</span></label>
-            <select id="hfSolarActivity">
-                <option value="low">Low (Sunspot Number ~20)</option>
-                <option value="medium">Medium (Sunspot Number ~70)</option>
-                <option value="high">High (Sunspot Number ~120)</option>
-            </select>
-        </div>
-        <button onclick="analyzeHF()">Analyze HF</button>
-        <div id="hf-result" class="result"></div>
-    </div>
-    <div id="help-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeHelp()">×</span>
-            <h2>RF Path Analyzer Help</h2>
-            <p>This tool helps plan RF links for frequencies between 30–87.975 MHz (VHF) and 225–450 MHz (UHF), and includes HF (3–30 MHz) analysis for skywave propagation.</p>
-            <ul>
-                <li>Choose placement mode: Click on the map, enter British National Grid (BNG) references (e.g., TQ123456), or use lat/lng coordinates.</li>
-                <li>Click the map, enter BNG, or input coordinates to place markers.</li>
-                <li>For VHF/UHF: Enter frequency, heights, power, antenna gains, and terrain type, then click “Analyze Path”. If the link fails, use "Suggest Relay Sites" to find intermediate points.</li>
-                <li>For HF: Click “HF Analysis” to access HF-specific analysis.</li>
-                <li>Use “Reset Link” to clear, “Save Path”/“Load Path” to store, and “Export/Import Data” for reports.</li>
-            </ul>
-            <p><strong>Notes:</strong> Ensure internet access for elevation data and weather updates. Replace YOUR_API_KEY with a valid OpenWeatherMap API key.</p>
+            <div class="control-group">
+                <h2>Actions</h2>
+                <button id="analyzeButton">Analyze Path</button>
+                <button id="suggestRelaySites" onclick="suggestRelaySites()">Suggest Relay Sites</button>
+                <button id="resetButton">Reset</button>
+                <button id="saveButton">Save</button>
+                <button id="loadButton">Load</button>
+                <button id="exportButton">Export</button>
+                <button id="importButton">Import</button>
+            </div>
+            <div class="control-group">
+                <h2>Search & Map</h2>
+                <label for="locationSearch">Location Search:</label>
+                <input type="text" id="locationSearch" placeholder="Location or BNG">
+                <button id="searchButton">Search</button>
+                <label for="map-layer">Map Layer:</label>
+                <select id="map-layer">
+                    <option value="street">Street</option>
+                    <option value="satellite">Satellite</option>
+                    <option value="topo">Topographic</option>
+                </select>
+            </div>
+        </section>
+        <section id="map"></section>
+        <div id="loading" style="display: none;">Loading...</div>
+        <section id="result"></section>
+        <section id="elevation-container">
+            <canvas id="elevation-profile"></canvas>
+            <div id="elevation-text" style="display: none;"></div>
+        </section>
+        <section id="fresnel-zone"></section>
+        <section id="atmospheric-status"></section>
+        <button class="help-button" onclick="showHelp()">Help</button>
+        <div id="help-modal" style="display: none;">
+            <h2>Help</h2>
+            <p>Use the controls to configure your RF path. Click the map or use BNG/coordinates to place markers.</p>
+            <button onclick="closeHelp()">Close</button>
         </div>
     </div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="https://nominatim.openstreetmap.org/ui/common.js"></script>
-    <script src="https://api.openweathermap.org/data/2.5/weather?appid=YOUR_API_KEY&units=metric"></script>
-    <script>
-        if (typeof Chart === 'undefined') {
-            console.warn('Chart.js not loaded from CDN.');
-        }
-        if (typeof L === 'undefined') {
-            console.error('Leaflet.js not loaded.');
-            document.getElementById('map').innerHTML = '<p>Error: Map library failed to load.</p>';
-        }
-    </script>
     <script src="script.js"></script>
 </body>
 </html>
