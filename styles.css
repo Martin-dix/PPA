@@ -86,7 +86,7 @@ body {
 }
 
 #elevation-profile {
-    max-height: 300px; /* Limit chart height for better scaling */
+    max-height: 300px;
     width: 100% !important;
 }
 
@@ -110,7 +110,7 @@ body {
 .fresnel-zone {
     background-color: rgba(255, 0, 0, 0.1);
     border-color: #ff0000;
-    max-height: 200px; /* Increased height for diagram */
+    max-height: 200px;
     overflow: auto;
     position: relative;
 }
@@ -125,7 +125,7 @@ body {
 }
 
 .polyline-amber {
-    color: #ffcc00 !important; /* Amber/Yellow */
+    color: #ffcc00 !important;
 }
 
 .polyline-red {
@@ -203,6 +203,26 @@ body {
     border-radius: 2px;
 }
 
+.distance-label {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 12px;
+    color: #333;
+    text-align: center;
+}
+
+#coord-group input {
+    width: 100px;
+}
+
+#coord-group div {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
 @media (max-width: 768px) {
     .controls {
         flex-direction: column;
@@ -228,5 +248,12 @@ body {
     .modal-content {
         margin: 20% auto;
         width: 90%;
+    }
+    #coord-group div {
+        flex-direction: column;
+        width: 100%;
+    }
+    #coord-group input {
+        width: 100%;
     }
 }
