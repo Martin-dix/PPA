@@ -94,6 +94,12 @@
                         </select>
                     </div>
                 </div>
+                <div class="param-row">
+                    <div class="param">
+                        <label for="terrainLossCoefficient">Terrain Loss Coefficient (dB/m):</label>
+                        <input type="number" id="terrainLossCoefficient" value="0.2" step="0.1" min="0" max="1">
+                    </div>
+                </div>
             </div>
             <div class="control-group">
                 <h2>Actions</h2>
@@ -116,6 +122,40 @@
                     <option value="satellite">Satellite</option>
                     <option value="topo">Topographic</option>
                 </select>
+            </div>
+            <div class="control-group">
+                <h2>HF Analysis <button onclick="showHFAnalysis()">Toggle</button></h2>
+                <div id="hf-analysis" style="display: none;">
+                    <div class="param-row">
+                        <div class="param">
+                            <label for="hfFrequency">HF Frequency (MHz):</label>
+                            <input type="number" id="hfFrequency" value="7" min="3" max="30" step="0.1">
+                        </div>
+                        <div class="param">
+                            <label for="hfAntennaHeight">Antenna Height (m):</label>
+                            <input type="number" id="hfAntennaHeight" value="5" min="0" step="0.1">
+                        </div>
+                    </div>
+                    <div class="param-row">
+                        <div class="param">
+                            <label for="hfTime">Time of Day:</label>
+                            <select id="hfTime">
+                                <option value="day">Day</option>
+                                <option value="night">Night</option>
+                            </select>
+                        </div>
+                        <div class="param">
+                            <label for="hfSolarActivity">Solar Activity:</label>
+                            <select id="hfSolarActivity">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button onclick="analyzeHF()">Analyze HF</button>
+                    <div id="hf-result"></div>
+                </div>
             </div>
         </section>
         <section id="map"></section>
