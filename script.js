@@ -65,11 +65,56 @@ function wireUI() {
 }
 
 function initMap() {
-  state.map = L.map("map").setView([51.5, -2], 7);
+  state.map = L.map("map", {
+    zoomControl: true,
+    preferCanvas: true
+  }).setView([51.5, -2], 7);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 18,
-    attribution: "© OpenStreetMap"
+  const street = L.tileLayer(
+    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap"
+    }
+  );
+
+  const topo = L.tileLayer(
+    "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 17,
+      attribution: "© OpenTopoMap (CC-BY-SA)"
+    }
+  );
+
+  const satellite = L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {
+      maxZoom: 19,
+      attribution: "© Esri"
+    }
+  );
+
+  const terrain = L.tileLayer(
+    "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",
+    {
+      maxZoom: 18,
+      attribution: "Stamen Terrain"
+    }
+  );
+
+  // default
+  street.addTo(state.map);
+
+  const baseLayers = {
+    "Street": street,
+    "Topographic": topo,
+    "Satellite": satellite,
+    "Terrain": terrain
+  };
+
+  L.control.layers(baseLayers, null, {
+    position: "topright",
+    collapsed: true
   }).addTo(state.map);
 
   state.map.on("click", (e) => {
@@ -81,10 +126,10 @@ function initMap() {
   addLegend();
   enableMapReadout();
 
-  // fix sizing after layout settles
   setTimeout(() => state.map.invalidateSize(), 150);
   window.addEventListener("resize", () => state.map.invalidateSize());
 }
+
 
 function addLegend() {
   const Legend = L.Control.extend({
