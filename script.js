@@ -113,7 +113,7 @@ function initMap() {
   };
 
   L.control.layers(baseLayers, null, {
-    position: "topright",
+    position: "topleft",
     collapsed: true
   }).addTo(state.map);
 
