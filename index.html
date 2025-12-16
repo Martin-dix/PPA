@@ -1,179 +1,193 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RF Path Analyser</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8" />
+  <title>RF Path Analyser</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-    <div class="container">
-        <header>
-            <h1>RF Path Analyser</h1>
-        </header>
-        <section class="controls">
-            <div class="control-group">
-                <h2>Placement Mode</h2>
-                <label><input type="radio" name="placementMode" value="click" checked onchange="console.log('Placement mode changed to: click')"> Click</label>
-                <label><input type="radio" name="placementMode" value="bng" onchange="console.log('Placement mode changed to: bng')"> BNG</label>
-                <label><input type="radio" name="placementMode" value="coords" onchange="console.log('Placement mode changed to: coords')"> Coordinates</label>
-                <div id="bng-group" style="display: none;">
-                    <label for="txBNG">Transmitter BNG:</label>
-                    <input type="text" id="txBNG" placeholder="e.g., TQ123456">
-                    <button onclick="placeFromBNG('transmitter')">Place Tx</button>
-                    <label for="rxBNG">Receiver BNG:</label>
-                    <input type="text" id="rxBNG" placeholder="e.g., TQ123456">
-                    <button onclick="placeFromBNG('receiver')">Place Rx</button>
-                </div>
-                <div id="coord-group" style="display: none;">
-                    <label for="txLat">Tx Latitude:</label>
-                    <input type="number" id="txLat" placeholder="e.g., 51.505" step="0.0001">
-                    <label for="txLng">Tx Longitude:</label>
-                    <input type="number" id="txLng" placeholder="e.g., -0.09" step="0.0001">
-                    <button onclick="placeFromCoords('transmitter')">Place Tx</button>
-                    <label for="rxLat">Rx Latitude:</label>
-                    <input type="number" id="rxLat" placeholder="e.g., 51.515" step="0.0001">
-                    <label for="rxLng">Rx Longitude:</label>
-                    <input type="number" id="rxLng" placeholder="e.g., -0.08" step="0.0001">
-                    <button onclick="placeFromCoords('receiver')">Place Rx</button>
-                </div>
-            </div>
-            <div class="control-group">
-                <h2>Link Parameters</h2>
-                <div class="param-row">
-                    <div class="param">
-                        <label for="frequency">Frequency (MHz):</label>
-                        <input type="number" id="frequency" value="30">
-                    </div>
-                    <div class="param">
-                        <label for="txHeight">Tx Height (m):</label>
-                        <input type="number" id="txHeight" value="5">
-                    </div>
-                    <div class="param">
-                        <label for="rxHeight">Rx Height (m):</label>
-                        <input type="number" id="rxHeight" value="5">
-                    </div>
-                </div>
-                <div class="param-row">
-                    <div class="param">
-                        <label for="txPower">Tx Power (W):</label>
-                        <input type="number" id="txPower" value="1">
-                    </div>
-                    <div class="param">
-                        <label for="rxSensitivity">Rx Sensitivity (dBm):</label>
-                        <input type="number" id="rxSensitivity" value="-90">
-                    </div>
-                    <div class="param">
-                        <label for="txAntennaGain">Tx Gain (dBi):</label>
-                        <input type="number" id="txAntennaGain" value="0">
-                    </div>
-                </div>
-                <div class="param-row">
-                    <div class="param">
-                        <label for="rxAntennaGain">Rx Gain (dBi):</label>
-                        <input type="number" id="rxAntennaGain" value="0">
-                    </div>
-                    <div class="param">
-                        <label for="terrainType">Terrain Type:</label>
-                        <select id="terrainType">
-                            <option value="open">Open</option>
-                            <option value="hilly">Hilly</option>
-                            <option value="urban">Urban</option>
-                            <option value="forest">Forest</option>
-                        </select>
-                    </div>
-                    <div class="param">
-                        <label for="pathGranularity">Path Granularity:</label>
-                        <select id="pathGranularity">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="param-row">
-                    <div class="param">
-                        <label for="terrainLossCoefficient">Terrain Loss Coefficient (dB/m):</label>
-                        <input type="number" id="terrainLossCoefficient" value="0.2" step="0.1" min="0" max="1">
-                    </div>
-                </div>
-            </div>
-            <div class="control-group">
-                <h2>Actions</h2>
-                <button id="analyzeButton">Analyze Path</button>
-                <button id="suggestRelaySites" onclick="suggestRelaySites()">Suggest Relay Sites</button>
-                <button id="resetButton">Reset</button>
-                <button id="saveButton">Save</button>
-                <button id="loadButton">Load</button>
-                <button id="exportButton">Export</button>
-                <button id="importButton">Import</button>
-            </div>
-            <div class="control-group">
-                <h2>Search & Map</h2>
-                <label for="locationSearch">Location Search:</label>
-                <input type="text" id="locationSearch" placeholder="Location or BNG">
-                <button id="searchButton">Search</button>
-                <label for="map-layer">Map Layer:</label>
-                <select id="map-layer">
-                    <option value="street">Street</option>
-                    <option value="satellite">Satellite</option>
-                    <option value="topo">Topographic</option>
-                </select>
-            </div>
-            <div class="control-group">
-                <h2>HF Analysis <button onclick="showHFAnalysis()">Toggle</button></h2>
-                <div id="hf-analysis" style="display: none;">
-                    <div class="param-row">
-                        <div class="param">
-                            <label for="hfFrequency">HF Frequency (MHz):</label>
-                            <input type="number" id="hfFrequency" value="7" min="3" max="30" step="0.1">
-                        </div>
-                        <div class="param">
-                            <label for="hfAntennaHeight">Antenna Height (m):</label>
-                            <input type="number" id="hfAntennaHeight" value="5" min="0" step="0.1">
-                        </div>
-                    </div>
-                    <div class="param-row">
-                        <div class="param">
-                            <label for="hfTime">Time of Day:</label>
-                            <select id="hfTime">
-                                <option value="day">Day</option>
-                                <option value="night">Night</option>
-                            </select>
-                        </div>
-                        <div class="param">
-                            <label for="hfSolarActivity">Solar Activity:</label>
-                            <select id="hfSolarActivity">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                            </select>
-                        </div>
-                    </div>
-                    <button onclick="analyzeHF()">Analyze HF</button>
-                    <div id="hf-result"></div>
-                </div>
-            </div>
-        </section>
-        <section id="map"></section>
-        <div id="loading" style="display: none;">Loading...</div>
-        <section id="result"></section>
-        <section id="elevation-container">
-            <canvas id="elevation-profile"></canvas>
-            <div id="elevation-text" style="display: none;"></div>
-        </section>
-        <section id="fresnel-zone"></section>
-        <section id="atmospheric-status"></section>
-        <button class="help-button" onclick="showHelp()">Help</button>
-        <div id="help-modal" style="display: none;">
-            <h2>Help</h2>
-            <p>Use the controls to configure your RF path. Click the map or use BNG/coordinates to place markers.</p>
-            <button onclick="closeHelp()">Close</button>
-        </div>
+  <div class="container">
+
+    <header>
+      <h1>RF Path Analyser</h1>
+      <div class="tools">
+        <button id="copy-btn" title="Copy summary">📋</button>
+        <button id="save-btn" title="Save project">💾</button>
+        <button id="load-btn" title="Load project">📂</button>
+        <button id="print-btn" title="Print">🖨️</button>
+      </div>
+    </header>
+
+    <div class="summary-bar" id="summary-bar">
+      Tx: <span id="tx-label">Click map</span>
+      &nbsp;•&nbsp;
+      Rx: <span id="rx-label">Click map</span>
+      &nbsp;•&nbsp;
+      <span id="bearing-distance"></span>
     </div>
-    <script src="script.js"></script>
+
+    <div class="main">
+      <aside class="controls">
+
+        <div class="card">
+          <h2>Placement</h2>
+          <div class="row">
+            <button id="clear-btn" class="secondary">Clear Tx/Rx</button>
+            <button id="clear-relay-btn" class="secondary">Clear Relay</button>
+          </div>
+          <p class="hint">
+            Click map to place <b>Tx</b>, then <b>Rx</b>. Markers are draggable.
+            <br>Relay is optional: scan corridor then “Use Best Relay” or click a suggestion.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>RF Parameters</h2>
+
+          <label>Frequency (MHz)</label>
+          <input id="frequency" type="number" value="145.5" step="0.025" />
+
+          <div class="two-col">
+            <div>
+              <label>Tx Height (m)</label>
+              <input id="txHeight" type="number" value="10" step="0.1" />
+            </div>
+            <div>
+              <label>Rx Height (m)</label>
+              <input id="rxHeight" type="number" value="2" step="0.1" />
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <label>Tx Power (W)</label>
+              <input id="txPowerW" type="number" value="50" step="1" min="0.1" />
+            </div>
+            <div>
+              <label>System Loss (dB)</label>
+              <input id="sysLossDb" type="number" value="2" step="0.5" min="0" />
+            </div>
+          </div>
+
+          <label>Antenna Preset (planning gain, dBi)</label>
+          <select id="antenna-preset">
+            <option value="hcdr_elev_3_5" selected>HCDR Elevated (3.5 dBi)</option>
+            <option value="vhf_mono_2_5">VHF Monopole / Whip (2.5 dBi)</option>
+            <option value="vhf_dipole_3_0">VHF Dipole (3.0 dBi)</option>
+            <option value="ref_dipole_2_15">Reference: ½-wave dipole (2.15 dBi)</option>
+            <option value="ref_mono_5_15">Reference: ¼-wave monopole ideal (5.15 dBi)</option>
+            <option value="custom">Custom…</option>
+          </select>
+
+          <div id="custom-gain-wrap" class="hidden">
+            <label>Custom Gain (dBi)</label>
+            <input id="customGainDb" type="number" value="3.0" step="0.1" />
+          </div>
+
+          <div class="two-col">
+            <div>
+              <label>Rx Sens (dBm)</label>
+              <input id="rxSensDbm" type="number" value="-100" step="1" />
+            </div>
+            <div>
+              <label>Fade Margin (dB)</label>
+              <input id="fadeMarginDb" type="number" value="15" step="1" min="0" />
+            </div>
+          </div>
+
+          <label>Terrain / Clutter</label>
+          <select id="terrain-type">
+            <option value="open">Open (0 dB)</option>
+            <option value="hilly" selected>Hilly (10 dB)</option>
+            <option value="urban">Urban (20 dB)</option>
+            <option value="forest">Forest (25 dB)</option>
+          </select>
+
+          <label>Fresnel Requirement</label>
+          <select id="fresnel-req">
+            <option value="0">0% (LOS only)</option>
+            <option value="0.6" selected>60% (recommended)</option>
+            <option value="1">100% (full 1st zone)</option>
+          </select>
+
+          <label>Earth Curvature (k-factor)</label>
+          <select id="kfactor">
+            <option value="1">1.0 (geometric)</option>
+            <option value="1.3333333333" selected>4/3 (standard)</option>
+            <option value="2">2.0 (super-refractive)</option>
+          </select>
+
+          <label>Success Rule</label>
+          <select id="success-rule">
+            <option value="margin" selected>Margin only</option>
+            <option value="margin_fresnel">Margin + Fresnel</option>
+          </select>
+
+          <label>Height Solve Mode (max mast 11.4 m)</label>
+          <select id="height-solve">
+            <option value="both" selected>Raise Tx and Rx equally</option>
+            <option value="tx">Raise Tx only</option>
+            <option value="rx">Raise Rx only</option>
+            <option value="taller">Raise taller mast only</option>
+          </select>
+
+          <label>Units</label>
+          <select id="units">
+            <option value="metric" selected>Metric (km, m)</option>
+            <option value="imperial">Imperial (mi, ft)</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <h2>Actions</h2>
+          <button id="analyze" class="big">Analyse Path</button>
+          <button id="reverse" class="secondary">Reverse Path</button>
+
+          <button id="highpoints-btn" class="secondary">View High Points (Top 10 in View)</button>
+          <button id="clear-highpoints-btn" class="secondary">Clear High Points</button>
+
+          <button id="suggest-relays-btn" class="secondary">Suggest Relays (Corridor Scan)</button>
+          <button id="use-best-relay-btn" class="secondary">Use Best Relay</button>
+
+          <div id="relay-list" class="hint"></div>
+        </div>
+
+        <input id="load-file" type="file" accept="application/json" class="hidden" />
+      </aside>
+
+      <section class="map-panel">
+        <div id="map-readout" class="map-readout">Move cursor over map…</div>
+        <div id="map"></div>
+
+        <div class="results-panel">
+          <div id="critical" class="hidden"></div>
+          <div class="chart-wrap">
+            <canvas id="elevation-profile"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer id="sunrise-sunset">
+      Online DEM: Open-Elevation • Models: FSPL + curvature (k) + knife-edge + Fresnel • Max mast: 11.4 m
+    </footer>
+  </div>
+
+  <div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <span>Analysing…</span>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
