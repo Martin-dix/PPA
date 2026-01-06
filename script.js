@@ -26,9 +26,6 @@ const state = {
   chart: null,
   profileCache: new Map(),
   pointElevCache: new Map(),
-
-  // last analysis snapshot for PDF
-  lastAnalysis: null
 };
 
 const el = (id) => document.getElementById(id);
@@ -49,9 +46,7 @@ function wireUI() {
   el("units").addEventListener("change", updateSummary);
 
   el("copy-btn").addEventListener("click", copySummary);
-
-  // ✅ PDF
-  el("pdf-btn").addEventListener("click", generatePdfReport);
+  el("pdf-btn").addEventListener("click", exportPdfReport);
 
   el("save-btn").addEventListener("click", saveProject);
   el("load-btn").addEventListener("click", () => el("load-file").click());
@@ -79,8 +74,7 @@ function initMap() {
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     {
       maxZoom: 19,
-      attribution: "© OpenStreetMap",
-      crossOrigin: true
+      attribution: "© OpenStreetMap"
     }
   );
 
@@ -88,8 +82,7 @@ function initMap() {
     "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
     {
       maxZoom: 17,
-      attribution: "© OpenTopoMap (CC-BY-SA)",
-      crossOrigin: true
+      attribution: "© OpenTopoMap (CC-BY-SA)"
     }
   );
 
@@ -97,8 +90,7 @@ function initMap() {
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
       maxZoom: 19,
-      attribution: "© Esri",
-      crossOrigin: true
+      attribution: "© Esri"
     }
   );
 
@@ -106,8 +98,7 @@ function initMap() {
     "https://stamen-tiles.a.ssl.fastly.net/terrain/{z}/{x}/{y}.jpg",
     {
       maxZoom: 18,
-      attribution: "Stamen Terrain",
-      crossOrigin: true
+      attribution: "Stamen Terrain"
     }
   );
 
@@ -138,6 +129,7 @@ function initMap() {
   setTimeout(() => state.map.invalidateSize(), 150);
   window.addEventListener("resize", () => state.map.invalidateSize());
 }
+
 
 function addLegend() {
   const Legend = L.Control.extend({
@@ -196,7 +188,6 @@ function clearTxRx() {
 
   updateSummary();
   hideCritical();
-  state.lastAnalysis = null;
 }
 
 function reversePath() {
@@ -323,14 +314,6 @@ function showLoading(on) {
   el("loading").classList.toggle("hidden", !on);
 }
 
-// ✅ FIXED: update only the loading <span> text (keeps spinner)
-function setLoadingText(msg) {
-  const box = document.getElementById("loading");
-  if (!box) return;
-  const sp = box.querySelector("span");
-  if (sp) sp.textContent = msg;
-}
-
 /* ===================== Elevation backends ===================== */
 
 function chunkArray(arr, size) {
@@ -361,10 +344,10 @@ async function fetchJsonWithRetries(url, retries = 2) {
 async function fetchElevations(locations) {
   if (!Array.isArray(locations) || locations.length === 0) return [];
 
-  // --- 1) Open-Meteo Elevation API ---
+  // --- 1) Open-Meteo Elevation API (best for grids/profiles) ---
   try {
     const results = [];
-    const chunks = chunkArray(locations, 100);
+    const chunks = chunkArray(locations, 100); // up to 100 coords/request :contentReference[oaicite:3]{index=3}
 
     for (const ch of chunks) {
       const lats = ch.map(p => p.latitude).join(",");
@@ -645,7 +628,6 @@ function minExtraHeightForFresnel(profile, freqMHz, txHeight_m, rxHeight_m, kFac
 async function analyzePath() {
   if (!state.txMarker || !state.rxMarker) {
     hideCritical();
-    state.lastAnalysis = null;
     return;
   }
 
@@ -659,7 +641,6 @@ async function analyzePath() {
 
 async function analyzeDirect() {
   showLoading(true);
-  setLoadingText("Analysing…");
   try {
     const inputs = readInputs();
     const tx = state.txMarker.getLatLng();
@@ -689,28 +670,14 @@ async function analyzeDirect() {
     setFresnelMarker(tx, rx, fr, profile);
     setDiffractionMarker(tx, rx, diff, profile);
 
-    const minP = minTxPowerWatts(totalLoss, inputs.antGainDb, inputs.antGainDb, inputs.rxSensDbm, inputs.fadeMarginDb);
-    const minH = minExtraHeightForFresnel(profile, inputs.freqMHz, inputs.txHeight_m, inputs.rxHeight_m, inputs.kFactor, inputs.fresnelFactor, inputs.heightSolve);
-
-    // ✅ Save for PDF
-    state.lastAnalysis = {
-      mode: "direct",
-      inputs, tx, rx,
-      fspl, clutterLoss, diff, fr,
-      totalLoss, tx_dBm, rx_dBm,
-      threshold, margin_dB,
-      fresnelPass, success, cls,
-      minP, minH
-    };
-
     renderCritical({
       inputs, tx, rx,
       fspl, clutterLoss, diff, fr,
       totalLoss, tx_dBm, rx_dBm,
       threshold, margin_dB,
       success, cls,
-      minP,
-      minH,
+      minP: minTxPowerWatts(totalLoss, inputs.antGainDb, inputs.antGainDb, inputs.rxSensDbm, inputs.fadeMarginDb),
+      minH: minExtraHeightForFresnel(profile, inputs.freqMHz, inputs.txHeight_m, inputs.rxHeight_m, inputs.kFactor, inputs.fresnelFactor, inputs.heightSolve),
     });
 
     drawElevationChart(profile, inputs, fr, diff);
@@ -720,7 +687,6 @@ async function analyzeDirect() {
 
   } finally {
     showLoading(false);
-    setLoadingText("Analysing…");
   }
 }
 
@@ -761,7 +727,6 @@ async function analyzeDirectSummary(tx, rx, inputs) {
 
 async function analyzeViaRelay() {
   showLoading(true);
-  setLoadingText("Analysing… (relay)");
   try {
     const inputs = readInputs();
     const tx = state.txMarker.getLatLng();
@@ -791,21 +756,11 @@ async function analyzeViaRelay() {
     const worst = a1.margin_dB <= a2.margin_dB ? a1 : a2;
     drawElevationChart(worst.profile, inputs, worst.fr, worst.diff);
 
-    // ✅ Save for PDF
-    const relayBottleneck = Math.min(a1.success.ok ? a1.margin_dB : -999, a2.success.ok ? a2.margin_dB : -999);
-    state.lastAnalysis = {
-      mode: "relay",
-      inputs, tx, rx, relay: r,
-      a1, a2,
-      relayBottleneck
-    };
-
     document.querySelector(".chart-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => state.map.invalidateSize(), 50);
 
   } finally {
     showLoading(false);
-    setLoadingText("Analysing…");
   }
 }
 
@@ -1123,7 +1078,6 @@ async function showHighPointsInView() {
   if (!state.map) return;
 
   showLoading(true);
-  setLoadingText("Analysing… (high points)");
   try {
     clearHighPoints();
 
@@ -1133,6 +1087,7 @@ async function showHighPointsInView() {
 
     const zoom = state.map.getZoom();
 
+    // zoom adaptive grid: fewer points when zoomed out (huge areas)
     const nx =
       zoom >= 13 ? 28 :
       zoom >= 11 ? 22 :
@@ -1143,8 +1098,10 @@ async function showHighPointsInView() {
     const coarse = await fetchElevations(coarseLocations);
     coarse.sort((a, c) => c.elevation - a.elevation);
 
-    const candidates = coarse.slice(0, Math.min(10, coarse.length));
+    // fewer candidates (reduces refine load) + reduces clustering on same ridge
+    const candidates = coarse.slice(0, Math.min(10, coarse.length)); // was 18
 
+    // refine radius based on zoom
     const refineRadiusM =
       zoom >= 13 ? 250 :
       zoom >= 11 ? 450 :
@@ -1167,13 +1124,17 @@ async function showHighPointsInView() {
     const merged = dedupeByApproxLatLng([...coarse, ...refined], 5);
     merged.sort((a, c) => c.elevation - a.elevation);
 
+    // spacing based on viewport size (much better than fixed 500m / zoom-only)
     const diagonalM = state.map.distance(b.getSouthWest(), b.getNorthEast());
 
+    // target ~ 1/10 of diagonal, clamped to sensible range
     let minSpacingM = diagonalM / 10;
-    minSpacingM = Math.max(1500, Math.min(minSpacingM, 8000));
+    minSpacingM = Math.max(1500, Math.min(minSpacingM, 8000)); // 1.5–8 km
 
+    // pick top 10 using "one-per-cell" to prevent bunching
     let top = selectTopOnePerCell(merged, 10, minSpacingM);
 
+    // fallback if we couldn't fill 10 (rare)
     if (top.length < 10) top = selectTopWithMinSpacing(merged, 10, minSpacingM);
     if (top.length < 10) top = merged.slice(0, 10);
 
@@ -1201,7 +1162,6 @@ async function showHighPointsInView() {
     alert("High points lookup failed (DEM service busy). Try zooming in or try again.");
   } finally {
     showLoading(false);
-    setLoadingText("Analysing…");
   }
 }
 
@@ -1253,6 +1213,7 @@ function selectTopWithMinSpacing(points, count, minSpacingM) {
   return chosen;
 }
 
+// NEW: strong de-clustering — allow only one selected point per "cell"
 function selectTopOnePerCell(points, count, cellSizeM) {
   const picked = [];
   const used = new Set();
@@ -1287,8 +1248,6 @@ function haversineMeters(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-/* ===================== Relay suggestions (corridor scan) ===================== */
-
 function buildCorridorSamples(tx, rx, alongSteps, acrossSteps, halfWidthM) {
   const midLat = (tx.lat + rx.lat) / 2;
   const metersPerDegLat = 111320;
@@ -1301,6 +1260,7 @@ function buildCorridorSamples(tx, rx, alongSteps, acrossSteps, halfWidthM) {
   const ux = dx / Lm;
   const uy = dy / Lm;
 
+  // perpendicular unit vector
   const px = -uy;
   const py = ux;
 
@@ -1385,6 +1345,18 @@ window.setRelayFromSuggestion = (lat, lng) => {
   setRelay(L.latLng(lat, lng));
 };
 
+
+/* ===================== Corridor scan relays ===================== */
+
+/* ===================== Corridor scan relays (hardened) ===================== */
+
+// NOTE: remove/avoid duplicates — keep ONLY this setLoadingText definition.
+function setLoadingText(msg) {
+  const box = document.getElementById("loading");
+  if (!box) return;
+  box.textContent = msg;
+}
+
 function withTimeout(promise, ms, label = "Operation") {
   return Promise.race([
     promise,
@@ -1411,6 +1383,7 @@ async function mapWithConcurrency(items, limit, fn) {
   return out;
 }
 
+// UPDATED: allow profileSamples override for speed during relay scoring
 async function quickEvaluateLink(a, b, inputs, profileSamples = 60) {
   const profile = await fetchElevationProfileHardened(a, b, profileSamples);
 
@@ -1443,21 +1416,24 @@ async function suggestRelaysCorridor() {
     const rx = state.rxMarker.getLatLng();
     const inputs = readInputs();
 
-    const corridorHalfWidthM = 1200;
-    const alongSteps = 26;
-    const acrossSteps = 5;
-    const candidatesToScore = 14;
+    // ---- BOUNDED defaults (fast + reliable) ----
+    const corridorHalfWidthM = 1200; // reduced
+    const alongSteps = 26;          // reduced
+    const acrossSteps = 5;          // reduced
+    const candidatesToScore = 14;   // reduced
     const outputCount = 8;
 
     setLoadingText("Analysing… (sampling corridor elevations)");
     const corridorPts = buildCorridorSamples(tx, rx, alongSteps, acrossSteps, corridorHalfWidthM);
 
+    // Elevation call with timeout
     const elevResRaw = await withTimeout(
       fetchElevations(corridorPts.map(p => ({ latitude: p.lat, longitude: p.lng }))),
       15000,
       "Corridor elevation"
     );
 
+    // Accept array OR {results:[...]}
     const elevRes = Array.isArray(elevResRaw)
       ? elevResRaw
       : (Array.isArray(elevResRaw?.results) ? elevResRaw.results : null);
@@ -1472,6 +1448,7 @@ async function suggestRelaysCorridor() {
       }))
       .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Number.isFinite(p.elev));
 
+    // Filter out points too close to endpoints
     const filtered = elevations.filter(p => {
       const ll = L.latLng(p.lat, p.lng);
       return state.map.distance(tx, ll) > 300 && state.map.distance(rx, ll) > 300;
@@ -1479,9 +1456,11 @@ async function suggestRelaysCorridor() {
 
     if (!filtered.length) throw new Error("No corridor samples after endpoint filtering");
 
+    // Take top-by-elevation candidates (cheap heuristic)
     filtered.sort((a, b) => b.elev - a.elev);
     const candidates = filtered.slice(0, Math.min(candidatesToScore, filtered.length));
 
+    // Score candidates: Tx→C and C→Rx
     setLoadingText(`Analysing… (scoring candidates 0/${candidates.length})`);
 
     const scored = await mapWithConcurrency(candidates, 3, async (c, i) => {
@@ -1500,6 +1479,7 @@ async function suggestRelaysCorridor() {
 
     clean.sort((a, b) => (b.bottleneck - a.bottleneck) || (b.elev - a.elev));
 
+    // spacing based on viewport diagonal (prevents clustering)
     const b = state.map.getBounds();
     const diagonalM = state.map.distance(b.getSouthWest(), b.getNorthEast());
     let minSpacingM = diagonalM / 12;
@@ -1513,10 +1493,10 @@ async function suggestRelaysCorridor() {
     setLoadingText("Analysing… done");
   } catch (e) {
     console.error(e);
+    // IMPORTANT: show the real reason, not just “DEM busy”
     alert(`Relay suggestion failed:\n${e?.message || e}`);
   } finally {
     showLoading(false);
-    setLoadingText("Analysing…");
   }
 }
 
@@ -1527,6 +1507,11 @@ function useBestRelay() {
   }
   setRelay(state.lastRelaySuggestions[0].p);
 }
+
+// keep your existing buildCorridorSamples(), selectRelayWithSpacing(), renderRelaySuggestions()
+// and window.setRelayFromSuggestion() below this line unchanged
+
+
 
 /* ===================== Relay set/clear ===================== */
 
@@ -1725,7 +1710,9 @@ function isInUK(latlng) {
 
 /* ===================== BNG + MGRS ===================== */
 
-/* ===================== BNG (British National Grid) ===================== */
+// ===================== BNG (British National Grid) =====================
+// WGS84 lat/lng -> OSGB36 Easting/Northing -> grid ref
+// Returns e.g. "SU 12345 67890" (10 digits) or fewer depending on digits.
 
 function toBNG(latlng, digits = 10) {
   const lat = latlng.lat;
@@ -1738,6 +1725,7 @@ function toBNG(latlng, digits = 10) {
 }
 
 function wgs84ToOsgb36EN(latDeg, lonDeg) {
+  // Convert WGS84 lat/lon to cartesian (WGS84)
   const a1 = 6378137.0;
   const b1 = 6356752.3141;
   const e2_1 = (a1*a1 - b1*b1) / (a1*a1);
@@ -1753,20 +1741,25 @@ function wgs84ToOsgb36EN(latDeg, lonDeg) {
   let y1 = (ν1 + H) * cosφ * Math.sin(λ);
   let z1 = ((1 - e2_1) * ν1 + H) * sinφ;
 
+  // Helmert transform WGS84 -> OSGB36 (approx; standard params)
+  // translations (m)
   const tx = -446.448;
   const ty = 125.157;
   const tz = -542.060;
 
+  // rotations (arcseconds -> radians)
   const rx = degToRad(0.0) + ( -0.1502 / 3600 ) * Math.PI/180;
   const ry = degToRad(0.0) + ( -0.2470 / 3600 ) * Math.PI/180;
   const rz = degToRad(0.0) + ( -0.8421 / 3600 ) * Math.PI/180;
 
+  // scale (ppm -> unitless)
   const s = 20.4894 * 1e-6;
 
   const x2 = tx + (1 + s) * x1 + (-rz) * y1 + (ry) * z1;
   const y2 = ty + (rz) * x1 + (1 + s) * y1 + (-rx) * z1;
   const z2 = tz + (-ry) * x1 + (rx) * y1 + (1 + s) * z1;
 
+  // Convert cartesian (OSGB36) -> lat/lon on Airy 1830
   const a2 = 6377563.396;
   const b2 = 6356256.909;
   const e2_2 = (a2*a2 - b2*b2) / (a2*a2);
@@ -1781,10 +1774,12 @@ function wgs84ToOsgb36EN(latDeg, lonDeg) {
   }
   const λ2 = Math.atan2(y2, x2);
 
+  // Project OSGB36 lat/lon -> Easting/Northing (Transverse Mercator)
   return latLonToOSGBEN(radToDeg(φ2), radToDeg(λ2));
 }
 
 function latLonToOSGBEN(latDeg, lonDeg) {
+  // Airy 1830 ellipsoid + OSGB projection
   const a = 6377563.396;
   const b = 6356256.909;
   const F0 = 0.9996012717;
@@ -1835,13 +1830,17 @@ function meridionalArc(phi, phi0, n, b, F0) {
 }
 
 function osGridRefFromEN(E, N, digits = 10) {
+  // Valid OSGB grid is roughly E:0..700000, N:0..1300000
   if (!Number.isFinite(E) || !Number.isFinite(N)) return "";
 
+  // 100km grid indices
   const e100k = Math.floor(E / 100000);
   const n100k = Math.floor(N / 100000);
 
   if (e100k < 0 || e100k > 6 || n100k < 0 || n100k > 12) return "";
 
+  // Convert to grid letters
+  // See OS lettering scheme (skips I)
   const l1 = (19 - n100k) - (19 - n100k) % 5 + Math.floor((e100k + 10) / 5);
   const l2 = (19 - n100k) * 5 % 25 + (e100k % 5);
 
@@ -1849,9 +1848,11 @@ function osGridRefFromEN(E, N, digits = 10) {
   const first = letters.charAt(l1);
   const second = letters.charAt(l2);
 
+  // Remainders within 100km square
   let e = Math.floor(E % 100000);
   let n = Math.floor(N % 100000);
 
+  // digits must be even: 0,2,4,6,8,10
   digits = Math.max(0, Math.min(10, Math.floor(digits / 2) * 2));
   const d = digits / 2;
 
@@ -1866,395 +1867,139 @@ function osGridRefFromEN(E, N, digits = 10) {
 function degToRad(d) { return d * Math.PI / 180; }
 function radToDeg(r) { return r * 180 / Math.PI; }
 
-/* ===================== MGRS (WGS84) ===================== */
-/* Precision = digits per component (0..5). Your app uses 5. */
-function toMGRS(latlng, precision = 5) {
-  const lat = latlng.lat;
-  const lon = latlng.lng;
+/* ===================== PDF Export (Print-to-PDF) ===================== */
 
-  const utm = latLonToUTM(lat, lon);
-  const zone = utm.zone;
-  const band = latitudeBandLetter(lat);
-  const { easting, northing, hemisphere } = utm;
-
-  const { colLetter, rowLetter } = mgrs100kLetters(zone, easting, northing);
-
-  const eR = Math.floor(easting % 100000);
-  const nR = Math.floor(northing % 100000);
-
-  precision = Math.max(0, Math.min(5, Math.floor(precision)));
-
-  if (precision === 0) {
-    return `${zone}${band} ${colLetter}${rowLetter}`;
+function exportPdfReport() {
+  if (!state.txMarker || !state.rxMarker) {
+    alert("Place Tx and Rx first.");
+    return;
   }
 
-  const div = Math.pow(10, 5 - precision);
-  const eStr = String(Math.floor(eR / div)).padStart(precision, "0");
-  const nStr = String(Math.floor(nR / div)).padStart(precision, "0");
+  const run = async () => {
+    // Ensure analysis exists
+    await analyzePath();
 
-  return `${zone}${band} ${colLetter}${rowLetter} ${eStr} ${nStr}`;
-}
+    const html = buildReportHTML();
+    const w = window.open("", "_blank");
 
-function latitudeBandLetter(lat) {
-  const bands = "CDEFGHJKLMNPQRSTUVWX";
-  if (lat >= 84) return "X";
-  if (lat <= -80) return "C";
-  const idx = Math.floor((lat + 80) / 8);
-  return bands.charAt(Math.max(0, Math.min(bands.length - 1, idx)));
-}
-
-function latLonToUTM(latDeg, lonDeg) {
-  // WGS84
-  const a = 6378137.0;
-  const f = 1 / 298.257223563;
-  const e2 = f * (2 - f);
-  const ep2 = e2 / (1 - e2);
-
-  let zone = Math.floor((lonDeg + 180) / 6) + 1;
-
-  // Norway/Svalbard special zones (basic handling)
-  if (latDeg >= 56.0 && latDeg < 64.0 && lonDeg >= 3.0 && lonDeg < 12.0) zone = 32;
-  if (latDeg >= 72.0 && latDeg < 84.0) {
-    if      (lonDeg >= 0.0  && lonDeg < 9.0)  zone = 31;
-    else if (lonDeg >= 9.0  && lonDeg < 21.0) zone = 33;
-    else if (lonDeg >= 21.0 && lonDeg < 33.0) zone = 35;
-    else if (lonDeg >= 33.0 && lonDeg < 42.0) zone = 37;
-  }
-
-  const lat = degToRad(latDeg);
-  const lon = degToRad(lonDeg);
-
-  const lon0 = degToRad((zone - 1) * 6 - 180 + 3); // central meridian
-  const k0 = 0.9996;
-
-  const sinφ = Math.sin(lat);
-  const cosφ = Math.cos(lat);
-  const tanφ = Math.tan(lat);
-
-  const N = a / Math.sqrt(1 - e2 * sinφ * sinφ);
-  const T = tanφ * tanφ;
-  const C = ep2 * cosφ * cosφ;
-  const A = cosφ * (lon - lon0);
-
-  const M = a * (
-    (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256) * lat
-    - (3*e2/8 + 3*e2*e2/32 + 45*e2*e2*e2/1024) * Math.sin(2*lat)
-    + (15*e2*e2/256 + 45*e2*e2*e2/1024) * Math.sin(4*lat)
-    - (35*e2*e2*e2/3072) * Math.sin(6*lat)
-  );
-
-  let easting = k0 * N * (
-    A + (1 - T + C) * Math.pow(A, 3) / 6
-    + (5 - 18*T + T*T + 72*C - 58*ep2) * Math.pow(A, 5) / 120
-  ) + 500000.0;
-
-  let northing = k0 * (
-    M + N * tanφ * (
-      A*A/2
-      + (5 - T + 9*C + 4*C*C) * Math.pow(A, 4) / 24
-      + (61 - 58*T + T*T + 600*C - 330*ep2) * Math.pow(A, 6) / 720
-    )
-  );
-
-  let hemisphere = "N";
-  if (latDeg < 0) {
-    hemisphere = "S";
-    northing += 10000000.0;
-  }
-
-  return { zone, easting, northing, hemisphere };
-}
-
-function mgrs100kLetters(zone, easting, northing) {
-  const colSets = ["ABCDEFGH", "JKLMNPQR", "STUVWXYZ"];
-  const rowSet = "ABCDEFGHJKLMNPQRSTUV";
-
-  const set = colSets[(zone - 1) % 3];
-
-  const e100k = Math.floor(easting / 100000);
-  const n100k = Math.floor(northing / 100000) % 20;
-
-  const colLetter = set.charAt((e100k - 1) % 8);
-
-  // row letters shift for even zones
-  const rowOffset = (zone % 2 === 0) ? 5 : 0;
-  const rowLetter = rowSet.charAt((n100k + rowOffset) % 20);
-
-  return { colLetter, rowLetter };
-}
-
-/* ===================== PDF Report ===================== */
-
-async function generatePdfReport() {
-  try {
-    if (!state.txMarker || !state.rxMarker) {
-      alert("Place Tx and Rx first.");
-      return;
-    }
-    if (!window.html2canvas) {
-      alert("PDF dependency missing: html2canvas did not load.");
-      return;
-    }
-    if (!window.jspdf?.jsPDF) {
-      alert("PDF dependency missing: jsPDF did not load.");
+    if (!w) {
+      alert("Popup blocked. Allow popups for PDF export.");
       return;
     }
 
-    // Ensure we have a recent analysis snapshot
-    if (!state.lastAnalysis) {
-      await analyzePath();
-    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
 
-    showLoading(true);
-    setLoadingText("Generating PDF report…");
+    // Give charts time to render
+    setTimeout(() => w.print(), 600);
+  };
 
-    // Let Leaflet settle
-    await new Promise(r => setTimeout(r, 250));
-    state.map.invalidateSize(true);
-
-    const tx = state.txMarker.getLatLng();
-    const rx = state.rxMarker.getLatLng();
-    const relay = state.relay?.latlng || null;
-
-    const inputs = readInputs();
-    const bothUK = isInUK(tx) && isInUK(rx);
-
-    const fmt = (p) => bothUK ? toBNG(p, 10) : toMGRS(p, 5);
-
-    const dist_km = haversineKm(tx, rx);
-    const bearing = bearingDeg(tx, rx);
-
-    // Recommendations (simple, operational)
-    const recs = [];
-    if (state.lastAnalysis?.mode === "direct") {
-      const a = state.lastAnalysis;
-      if (a.margin_dB < 0) {
-        recs.push(`Increase Tx power to at least ${a.minP.requiredW < 1000 ? a.minP.requiredW.toFixed(2) + " W" : (a.minP.requiredW/1000).toFixed(2) + " kW"} (margin ≥ 0).`);
-        if (a.minH.extra_m == null) recs.push("Fresnel clearance not achievable within 11.4 m mast cap.");
-        else recs.push(`Raise mast height by +${a.minH.extra_m.toFixed(1)} m (mode: ${a.inputs.heightSolve}) to pass Fresnel.`);
-        if (state.lastRelaySuggestions?.length) recs.push("Consider adding a relay from the suggested list.");
-      } else if (a.margin_dB < 10) {
-        recs.push("Link is close to threshold. Increase fade margin or gain, or raise height for robustness.");
-      } else if (a.margin_dB < 20) {
-        recs.push("Link is usable but consider increasing margin to ≥20 dB for higher resilience.");
-      } else {
-        recs.push("No action required — strong link margin.");
-      }
-    } else if (state.lastAnalysis?.mode === "relay") {
-      const a = state.lastAnalysis;
-      recs.push(`Relay in use. Bottleneck margin: ${a.relayBottleneck.toFixed(1)} dB.`);
-      if (a.relayBottleneck < 10) recs.push("Consider a higher relay, higher gain antennas, or more Tx power.");
-    } else {
-      recs.push("Run Analyse Path before generating a report for full metrics.");
-    }
-
-    // CAPTURE images
-    const mapEl = document.getElementById("map");
-    const critEl = document.getElementById("critical");
-    const chartCanvas = document.getElementById("elevation-profile");
-
-    let mapImg = null, critImg = null, chartImg = null;
-    try {
-      const mapCanvas = await html2canvas(mapEl, { useCORS: true, scale: 2, backgroundColor: "#0d1117" });
-      mapImg = mapCanvas.toDataURL("image/png", 1.0);
-    } catch (e) {
-      console.warn("Map capture failed (CORS tiles). Continuing without map image.", e);
-    }
-
-    try {
-      const critCanvas = await html2canvas(critEl, { useCORS: true, scale: 2, backgroundColor: "#161b22" });
-      critImg = critCanvas.toDataURL("image/png", 1.0);
-    } catch (e) {
-      console.warn("Critical capture failed. Continuing.", e);
-    }
-
-    if (chartCanvas) {
-      try { chartImg = chartCanvas.toDataURL("image/png", 1.0); } catch {}
-    }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const m = 12;
-
-    const now = new Date();
-    const stamp = now.toLocaleString();
-
-    // helpers
-    const addHeading = (text, y) => {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text(text, m, y);
-    };
-    const addBody = (lines, y) => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(lines, m, y);
-    };
-
-    // PAGE 1: Summary
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("RF Path Analyser – Report", m, 16);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Generated: ${stamp}`, m, 22);
-
-    addHeading("Link Endpoints", 32);
-    addBody([
-      `Tx: ${fmt(tx)}  (${tx.lat.toFixed(5)}, ${tx.lng.toFixed(5)})`,
-      `Rx: ${fmt(rx)}  (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})`,
-      `Relay: ${relay ? `${fmt(relay)}  (${relay.lat.toFixed(5)}, ${relay.lng.toFixed(5)})` : "none"}`
-    ], 38);
-
-    addHeading("At a Glance", 60);
-    const ruleText = inputs.successRule === "margin_fresnel" ? "Margin + Fresnel" : "Margin only";
-    let verdict = "—";
-    let marginTxt = "—";
-    let rxTxt = "—";
-    let thrTxt = "—";
-    let fresnelTxt = "—";
-    let diffTxt = "—";
-
-    if (state.lastAnalysis?.mode === "direct") {
-      const a = state.lastAnalysis;
-      verdict = a.cls.label;
-      marginTxt = `${a.margin_dB.toFixed(1)} dB`;
-      rxTxt = `${a.rx_dBm.toFixed(1)} dBm`;
-      thrTxt = `${a.threshold.toFixed(1)} dBm`;
-      fresnelTxt = `${a.fr.worstClear_m.toFixed(1)} m @ ${a.fr.worstAt_km.toFixed(2)} km (${a.fr.worstClear_m >= 0 ? "PASS" : "FAIL"})`;
-      diffTxt = `${a.diff.loss_dB.toFixed(1)} dB (v=${a.diff.maxV.toFixed(2)}) @ ${a.diff.worstAt_km.toFixed(2)} km`;
-    } else if (state.lastAnalysis?.mode === "relay") {
-      const a = state.lastAnalysis;
-      verdict = classifyLink(a.relayBottleneck).label;
-      marginTxt = `${a.relayBottleneck.toFixed(1)} dB (bottleneck)`;
-    }
-
-    addBody([
-      `Distance: ${dist_km.toFixed(2)} km    Bearing: ${bearing.toFixed(0)}°`,
-      `Rule: ${ruleText}    Verdict: ${verdict}`,
-      `Rx level: ${rxTxt}    Threshold: ${thrTxt}    Margin: ${marginTxt}`,
-      `Worst Fresnel: ${fresnelTxt}`,
-      `Worst diffraction: ${diffTxt}`
-    ], 66);
-
-    addHeading("Recommendations", 94);
-    const recLines = recs.length ? recs : ["No recommendations."];
-    addBody(recLines, 100);
-
-    // Optional: include critical box snapshot on page 1
-    let yImg = 122;
-    if (critImg) {
-      addHeading("Computed Summary (app)", yImg);
-      yImg += 4;
-      const imgW = pageW - m * 2;
-      doc.addImage(critImg, "PNG", m, yImg, imgW, 55);
-    }
-
-    // PAGE 2: Map
-    doc.addPage();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Map", m, 16);
-
-    if (mapImg) {
-      const imgW = pageW - m * 2;
-      doc.addImage(mapImg, "PNG", m, 22, imgW, 160);
-    } else {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text("Map capture unavailable (tile provider CORS restrictions).", m, 26);
-    }
-
-    // PAGE 3: Elevation profile
-    doc.addPage();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Elevation Profile", m, 16);
-
-    if (chartImg) {
-      const imgW = pageW - m * 2;
-      doc.addImage(chartImg, "PNG", m, 22, imgW, 110);
-    } else {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text("Chart image unavailable.", m, 26);
-    }
-
-    // PAGE 4: Inputs + Relay appendix
-    doc.addPage();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("Inputs", m, 16);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-
-    const inputsLines = [
-      `Frequency: ${inputs.freqMHz} MHz`,
-      `Tx Height: ${inputs.txHeight_m} m    Rx Height: ${inputs.rxHeight_m} m`,
-      `Tx Power: ${inputs.txPowerW} W    System Loss: ${inputs.sysLossDb} dB`,
-      `Antenna Gain: ${inputs.antGainDb} dBi`,
-      `Rx Sens: ${inputs.rxSensDbm} dBm    Fade Margin: ${inputs.fadeMarginDb} dB`,
-      `Terrain/Clutter: ${inputs.terrain}`,
-      `Fresnel Requirement: ${Math.round(inputs.fresnelFactor * 100)}%`,
-      `Earth Curvature k-factor: ${inputs.kFactor}`,
-      `Success Rule: ${ruleText}`,
-      `Height Solve Mode: ${inputs.heightSolve}`,
-      `Units: ${inputs.units}`
-    ];
-    doc.text(inputsLines, m, 24);
-
-    let yApp = 80;
-
-    if (state.lastAnalysis?.mode === "relay") {
-      const a = state.lastAnalysis;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text("Relay Appendix", m, yApp); yApp += 6;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text([
-        `Relay: ${fmt(a.relay)} (${a.relay.lat.toFixed(5)}, ${a.relay.lng.toFixed(5)})`,
-        `Tx→Relay: ${a.a1.distance_km.toFixed(2)} km, margin ${a.a1.margin_dB.toFixed(1)} dB, Fresnel ${a.a1.fr.worstClear_m>=0?"PASS":"FAIL"}`,
-        `Relay→Rx: ${a.a2.distance_km.toFixed(2)} km, margin ${a.a2.margin_dB.toFixed(1)} dB, Fresnel ${a.a2.fr.worstClear_m>=0?"PASS":"FAIL"}`,
-        `Bottleneck margin: ${a.relayBottleneck.toFixed(1)} dB`
-      ], m, yApp);
-      yApp += 26;
-    }
-
-    if (state.lastRelaySuggestions?.length) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.text("Suggested Relay Candidates (Top 5)", m, yApp); yApp += 6;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-
-      const top5 = state.lastRelaySuggestions.slice(0, 5);
-      const lines = top5.map((s, i) => {
-        const g = bothUK ? toBNG(s.p, 10) : toMGRS(s.p, 5);
-        return `${i+1}) ${g} • elev ${Math.round(s.elev)} m • bottleneck ${s.bottleneck.toFixed(1)} dB`;
-      });
-      doc.text(lines, m, yApp);
-    }
-
-    const safe =
-      now.getFullYear().toString() +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      String(now.getDate()).padStart(2, "0") + "-" +
-      String(now.getHours()).padStart(2, "0") +
-      String(now.getMinutes()).padStart(2, "0");
-
-    doc.save(`rf-path-report-${safe}.pdf`);
-  } catch (err) {
+  run().catch(err => {
     console.error(err);
-    alert(`PDF generation failed:\n${err?.message || err}`);
-  } finally {
-    showLoading(false);
-    setLoadingText("Analysing…");
+    alert("PDF export failed. See console for details.");
+  });
+}
+
+function buildReportHTML() {
+  const tx = state.txMarker.getLatLng();
+  const rx = state.rxMarker.getLatLng();
+  const relay = state.relay?.latlng || null;
+
+  const inputs = readInputs();
+  const bothUK = isInUK(tx) && isInUK(rx);
+
+  const fmt = (p) =>
+    bothUK ? toBNG(p, 10) : toMGRS(p, 5);
+
+  const distKm = haversineKm(tx, rx).toFixed(2);
+  const bearing = bearingDeg(tx, rx).toFixed(0);
+
+  const chartCanvas = document.getElementById("elevation-profile");
+  const chartImg = chartCanvas
+    ? chartCanvas.toDataURL("image/png", 1.0)
+    : null;
+
+  const criticalHTML = el("critical")?.innerHTML || "";
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RF Path Analyser – Report</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 24px;
+    color: #000;
   }
+  h1, h2 {
+    margin-bottom: 6px;
+  }
+  h1 { font-size: 20px; }
+  h2 { font-size: 15px; margin-top: 18px; }
+  .block {
+    margin-top: 12px;
+  }
+  .kv {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    row-gap: 4px;
+    column-gap: 10px;
+    font-size: 12px;
+  }
+  img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+  .critical {
+    border: 1px solid #444;
+    padding: 10px;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  .pagebreak {
+    page-break-before: always;
+  }
+</style>
+</head>
+<body>
+
+<h1>RF Path Analyser – Link Report</h1>
+
+<div class="block kv">
+  <div><b>Tx</b></div><div>${fmt(tx)} (${tx.lat.toFixed(5)}, ${tx.lng.toFixed(5)})</div>
+  <div><b>Rx</b></div><div>${fmt(rx)} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})</div>
+  <div><b>Relay</b></div><div>${relay ? fmt(relay) : "None"}</div>
+  <div><b>Distance</b></div><div>${distKm} km</div>
+  <div><b>Bearing</b></div><div>${bearing}°</div>
+</div>
+
+<h2>Inputs</h2>
+<div class="kv">
+  <div>Frequency</div><div>${inputs.freqMHz} MHz</div>
+  <div>Tx / Rx Height</div><div>${inputs.txHeight_m} m / ${inputs.rxHeight_m} m</div>
+  <div>Tx Power</div><div>${inputs.txPowerW} W</div>
+  <div>Antenna Gain</div><div>${inputs.antGainDb} dBi</div>
+  <div>System Loss</div><div>${inputs.sysLossDb} dB</div>
+  <div>Rx Sens + Fade</div><div>${inputs.rxSensDbm} dBm + ${inputs.fadeMarginDb} dB</div>
+  <div>Terrain</div><div>${inputs.terrain}</div>
+  <div>Fresnel</div><div>${Math.round(inputs.fresnelFactor * 100)}%</div>
+  <div>k-factor</div><div>${inputs.kFactor}</div>
+  <div>Rule</div><div>${inputs.successRule}</div>
+</div>
+
+<h2>Link Summary</h2>
+<div class="critical">${criticalHTML}</div>
+
+<div class="pagebreak"></div>
+
+<h2>Elevation Profile</h2>
+${chartImg ? `<img src="${chartImg}">` : "<p>No chart available</p>"}
+
+</body>
+</html>
+`;
 }
