@@ -3,193 +3,191 @@
 <head>
   <meta charset="UTF-8" />
   <title>RF Path Analyser</title>
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <!-- Leaflet -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-  <!-- PDF export libs -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
+  <div class="container">
 
-<div id="loading">
-  <div class="spinner"></div>
-  Analysing…
-</div>
+    <header>
+      <h1>RF Path Analyser</h1>
+      <div class="tools">
+        <button id="copy-btn" title="Copy summary">📋</button>
+        <button id="save-btn" title="Save project">💾</button>
+        <button id="load-btn" title="Load project">📂</button>
+        <button id="print-btn" title="Print">🖨️</button>
+      </div>
+    </header>
 
-<div class="container">
-
-  <header>
-    <h1>RF Path Analyser</h1>
-    <div class="tools">
-      <button id="copy-btn">Copy</button>
-      <button id="save-btn">Save</button>
-      <button id="load-btn">Open</button>
-      <button id="pdf-btn">Generate PDF</button>
+    <div class="summary-bar" id="summary-bar">
+      Tx: <span id="tx-label">Click map</span>
+      &nbsp;•&nbsp;
+      Rx: <span id="rx-label">Click map</span>
+      &nbsp;•&nbsp;
+      <span id="bearing-distance"></span>
     </div>
-  </header>
 
-  <div class="summary-bar">
-    <span id="tx-label">Click map</span>
-    →
-    <span id="rx-label">Click map</span>
-    <span id="bearing-distance"></span>
+    <div class="main">
+      <aside class="controls">
+
+        <div class="card">
+          <h2>Placement</h2>
+          <div class="row">
+            <button id="clear-btn" class="secondary">Clear Tx/Rx</button>
+            <button id="clear-relay-btn" class="secondary">Clear Relay</button>
+          </div>
+          <p class="hint">
+            Click map to place <b>Tx</b>, then <b>Rx</b>. Markers are draggable.
+            <br>Relay is optional: scan corridor then “Use Best Relay” or click a suggestion.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>RF Parameters</h2>
+
+          <label>Frequency (MHz)</label>
+          <input id="frequency" type="number" value="145.5" step="0.025" />
+
+          <div class="two-col">
+            <div>
+              <label>Tx Height (m)</label>
+              <input id="txHeight" type="number" value="10" step="0.1" />
+            </div>
+            <div>
+              <label>Rx Height (m)</label>
+              <input id="rxHeight" type="number" value="2" step="0.1" />
+            </div>
+          </div>
+
+          <div class="two-col">
+            <div>
+              <label>Tx Power (W)</label>
+              <input id="txPowerW" type="number" value="50" step="1" min="0.1" />
+            </div>
+            <div>
+              <label>System Loss (dB)</label>
+              <input id="sysLossDb" type="number" value="2" step="0.5" min="0" />
+            </div>
+          </div>
+
+          <label>Antenna Preset (planning gain, dBi)</label>
+          <select id="antenna-preset">
+            <option value="hcdr_elev_3_5" selected>HCDR Elevated (3.5 dBi)</option>
+            <option value="vhf_mono_2_5">VHF Monopole / Whip (2.5 dBi)</option>
+            <option value="vhf_dipole_3_0">VHF Dipole (3.0 dBi)</option>
+            <option value="ref_dipole_2_15">Reference: ½-wave dipole (2.15 dBi)</option>
+            <option value="ref_mono_5_15">Reference: ¼-wave monopole ideal (5.15 dBi)</option>
+            <option value="custom">Custom…</option>
+          </select>
+
+          <div id="custom-gain-wrap" class="hidden">
+            <label>Custom Gain (dBi)</label>
+            <input id="customGainDb" type="number" value="3.0" step="0.1" />
+          </div>
+
+          <div class="two-col">
+            <div>
+              <label>Rx Sens (dBm)</label>
+              <input id="rxSensDbm" type="number" value="-100" step="1" />
+            </div>
+            <div>
+              <label>Fade Margin (dB)</label>
+              <input id="fadeMarginDb" type="number" value="15" step="1" min="0" />
+            </div>
+          </div>
+
+          <label>Terrain / Clutter</label>
+          <select id="terrain-type">
+            <option value="open">Open (0 dB)</option>
+            <option value="hilly" selected>Hilly (10 dB)</option>
+            <option value="urban">Urban (20 dB)</option>
+            <option value="forest">Forest (25 dB)</option>
+          </select>
+
+          <label>Fresnel Requirement</label>
+          <select id="fresnel-req">
+            <option value="0">0% (LOS only)</option>
+            <option value="0.6" selected>60% (recommended)</option>
+            <option value="1">100% (full 1st zone)</option>
+          </select>
+
+          <label>Earth Curvature (k-factor)</label>
+          <select id="kfactor">
+            <option value="1">1.0 (geometric)</option>
+            <option value="1.3333333333" selected>4/3 (standard)</option>
+            <option value="2">2.0 (super-refractive)</option>
+          </select>
+
+          <label>Success Rule</label>
+          <select id="success-rule">
+            <option value="margin" selected>Margin only</option>
+            <option value="margin_fresnel">Margin + Fresnel</option>
+          </select>
+
+          <label>Height Solve Mode (max mast 11.4 m)</label>
+          <select id="height-solve">
+            <option value="both" selected>Raise Tx and Rx equally</option>
+            <option value="tx">Raise Tx only</option>
+            <option value="rx">Raise Rx only</option>
+            <option value="taller">Raise taller mast only</option>
+          </select>
+
+          <label>Units</label>
+          <select id="units">
+            <option value="metric" selected>Metric (km, m)</option>
+            <option value="imperial">Imperial (mi, ft)</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <h2>Actions</h2>
+          <button id="analyze" class="big">Analyse Path</button>
+          <button id="reverse" class="secondary">Reverse Path</button>
+
+          <button id="highpoints-btn" class="secondary">View High Points (Top 10 in View)</button>
+          <button id="clear-highpoints-btn" class="secondary">Clear High Points</button>
+
+          <button id="suggest-relays-btn" class="secondary">Suggest Relays (Corridor Scan)</button>
+          <button id="use-best-relay-btn" class="secondary">Use Best Relay</button>
+
+          <div id="relay-list" class="hint"></div>
+        </div>
+
+        <input id="load-file" type="file" accept="application/json" class="hidden" />
+      </aside>
+
+      <section class="map-panel">
+        <div id="map-readout" class="map-readout">Move cursor over map…</div>
+        <div id="map"></div>
+
+        <div class="results-panel">
+          <div id="critical" class="hidden"></div>
+          <div class="chart-wrap">
+            <canvas id="elevation-profile"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer id="sunrise-sunset">
+      Online DEM: Open-Elevation • Models: FSPL + curvature (k) + knife-edge + Fresnel • Max mast: 11.4 m
+    </footer>
   </div>
 
-  <div class="main">
-
-    <div class="controls">
-
-      <div class="card">
-        <h2>Path</h2>
-        <button id="analyze" class="big">Analyse Path</button>
-        <div class="row">
-          <button id="reverse" class="secondary">Reverse</button>
-          <button id="clear-btn" class="secondary">Clear Tx/Rx</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>RF Inputs</h2>
-
-        <label>Frequency (MHz)</label>
-        <input id="frequency" value="145.5" />
-
-        <div class="two-col">
-          <div>
-            <label>Tx height (m)</label>
-            <input id="txHeight" value="10" />
-          </div>
-          <div>
-            <label>Rx height (m)</label>
-            <input id="rxHeight" value="2" />
-          </div>
-        </div>
-
-        <label>Tx power (W)</label>
-        <input id="txPowerW" value="50" />
-
-        <label>System loss (dB)</label>
-        <input id="sysLossDb" value="2" />
-
-        <label>Antenna</label>
-        <select id="antenna-preset">
-          <option value="hcdr_elev_3_5">HCDR elevated (3.5 dBi)</option>
-          <option value="vhf_mono_2_5">VHF mono (2.5 dBi)</option>
-          <option value="vhf_dipole_3_0">VHF dipole (3.0 dBi)</option>
-          <option value="ref_dipole_2_15">Ref dipole (2.15 dBi)</option>
-          <option value="ref_mono_5_15">Ref mono (5.15 dBi)</option>
-          <option value="custom">Custom</option>
-        </select>
-
-        <div id="custom-gain-wrap" class="hidden">
-          <label>Custom gain (dBi)</label>
-          <input id="customGainDb" value="3.0" />
-        </div>
-
-        <label>Rx sensitivity (dBm)</label>
-        <input id="rxSensDbm" value="-100" />
-
-        <label>Fade margin (dB)</label>
-        <input id="fadeMarginDb" value="15" />
-      </div>
-
-      <div class="card">
-        <h2>Propagation</h2>
-
-        <label>Terrain</label>
-        <select id="terrain-type">
-          <option value="open">Open</option>
-          <option value="hilly">Hilly</option>
-          <option value="urban">Urban</option>
-          <option value="forest">Forest</option>
-        </select>
-
-        <label>Fresnel clearance</label>
-        <input id="fresnel-req" value="0.6" />
-
-        <label>K-factor</label>
-        <input id="kfactor" value="1.333" />
-
-        <label>Success rule</label>
-        <select id="success-rule">
-          <option value="margin">Margin only</option>
-          <option value="margin_fresnel">Margin + Fresnel</option>
-        </select>
-
-        <label>Height solve</label>
-        <select id="height-solve">
-          <option value="both">Raise both</option>
-          <option value="tx">Raise Tx</option>
-          <option value="rx">Raise Rx</option>
-          <option value="taller">Raise taller</option>
-        </select>
-
-        <label>Units</label>
-        <select id="units">
-          <option value="metric">Metric</option>
-          <option value="imperial">Imperial</option>
-        </select>
-      </div>
-
-      <div class="card">
-        <h2>Relays & Terrain</h2>
-        <button id="suggest-relays-btn">Suggest relays</button>
-        <button id="use-best-relay-btn" class="secondary">Use best relay</button>
-        <button id="clear-relay-btn" class="secondary">Clear relay</button>
-
-        <hr style="margin:10px 0;opacity:.2">
-
-        <button id="highpoints-btn">Show high points</button>
-        <button id="clear-highpoints-btn" class="secondary">Clear high points</button>
-      </div>
-
-    </div>
-
-    <div class="map-panel">
-      <div id="map"></div>
-      <div id="map-readout" class="map-readout"></div>
-
-      <div class="results-panel">
-        <div id="critical" class="hidden"></div>
-
-        <div class="chart-wrap">
-          <canvas id="elevation-profile"></canvas>
-        </div>
-      </div>
-    </div>
-
+  <div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <span>Analysing…</span>
   </div>
 
-  <footer>
-    RF Path Analyser
-  </footer>
-
-</div>
-
-<input id="load-file" type="file" accept="application/json" hidden />
-
-<!-- Hidden export-only map -->
-<div id="export-map-wrapper" class="pdf-only">
-  <div id="export-map"></div>
-</div>
-
-<!-- Leaflet -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- App -->
-<script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
 </html>
