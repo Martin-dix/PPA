@@ -46,7 +46,7 @@ function wireUI() {
   el("units").addEventListener("change", updateSummary);
 
   el("copy-btn").addEventListener("click", copySummary);
-el("pdf-btn").addEventListener("click", generatePDFReport);
+  el("print-btn").addEventListener("click", () => window.print());
 
   el("save-btn").addEventListener("click", saveProject);
   el("load-btn").addEventListener("click", () => el("load-file").click());
@@ -682,6 +682,7 @@ async function analyzeDirect() {
 
     drawElevationChart(profile, inputs, fr, diff);
 
+    document.querySelector(".chart-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => state.map.invalidateSize(), 50);
 
   } finally {
@@ -755,6 +756,7 @@ async function analyzeViaRelay() {
     const worst = a1.margin_dB <= a2.margin_dB ? a1 : a2;
     drawElevationChart(worst.profile, inputs, worst.fr, worst.diff);
 
+    document.querySelector(".chart-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => state.map.invalidateSize(), 50);
 
   } finally {
@@ -1864,172 +1866,3 @@ function osGridRefFromEN(E, N, digits = 10) {
 
 function degToRad(d) { return d * Math.PI / 180; }
 function radToDeg(r) { return r * 180 / Math.PI; }
-
-/* =========================================================
-   PDF REPORT EXPORT — CLEAN MAP + SUMMARY + PROFILE
-   ========================================================= */
-
-async function generatePDFReport() {
-  if (!state.txMarker || !state.rxMarker) {
-    alert("Place Tx and Rx first.");
-    return;
-  }
-
-  showLoading(true);
-
-  try {
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-    const margin = 12;
-    let y = margin;
-
-    /* ---------- HEADER ---------- */
-    pdf.setFontSize(16);
-    pdf.text("RF Path Analysis Report", margin, y);
-    y += 8;
-
-    pdf.setFontSize(10);
-    pdf.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
-    y += 6;
-
-    /* ---------- TX / RX LOCATIONS ---------- */
-    const tx = state.txMarker.getLatLng();
-    const rx = state.rxMarker.getLatLng();
-    const bothUK = isInUK(tx) && isInUK(rx);
-
-    const txStr = bothUK ? toBNG(tx, 10) : `${tx.lat.toFixed(5)}, ${tx.lng.toFixed(5)}`;
-    const rxStr = bothUK ? toBNG(rx, 10) : `${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)}`;
-
-    pdf.setFontSize(11);
-    pdf.text(`Tx: ${txStr}`, margin, y); y += 6;
-    pdf.text(`Rx: ${rxStr}`, margin, y); y += 6;
-
-    if (state.relay) {
-      const r = state.relay.latlng;
-      const rStr = bothUK ? toBNG(r, 10) : `${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
-      pdf.text(`Relay: ${rStr}`, margin, y);
-      y += 6;
-    }
-
-    y += 4;
-
-    /* ---------- CLEAN EXPORT MAP ---------- */
-    const mapImg = await renderExportMapImage();
-    pdf.setFontSize(12);
-    pdf.text("Map", margin, y);
-    y += 4;
-
-    pdf.addImage(mapImg, "PNG", margin, y, 186, 95);
-    y += 100;
-
-    /* ---------- LINK SUMMARY ---------- */
-    const crit = document.getElementById("critical");
-    if (crit && !crit.classList.contains("hidden")) {
-      pdf.setFontSize(12);
-      pdf.text("Link Summary", margin, y);
-      y += 4;
-
-      const summaryCanvas = await html2canvas(crit, {
-        scale: 2,
-        backgroundColor: "#ffffff"
-      });
-
-      const img = summaryCanvas.toDataURL("image/png");
-      const h = (summaryCanvas.height / summaryCanvas.width) * 186;
-      pdf.addImage(img, "PNG", margin, y, 186, h);
-      y += h + 4;
-    }
-
-    /* ---------- ELEVATION PROFILE ---------- */
-    const chart = document.getElementById("elevation-profile");
-    if (chart) {
-      pdf.addPage();
-      y = margin;
-
-      pdf.setFontSize(12);
-      pdf.text("Elevation Profile", margin, y);
-      y += 4;
-
-      const chartCanvas = await html2canvas(chart, {
-        scale: 2,
-        backgroundColor: "#ffffff"
-      });
-
-      const img = chartCanvas.toDataURL("image/png");
-      const h = (chartCanvas.height / chartCanvas.width) * 186;
-      pdf.addImage(img, "PNG", margin, y, 186, h);
-    }
-
-    /* ---------- SAVE ---------- */
-    pdf.save(`rf-path-report-${Date.now()}.pdf`);
-
-  } catch (e) {
-    console.error(e);
-    alert("PDF generation failed — see console.");
-  } finally {
-    showLoading(false);
-  }
-}
-
-/* ---------- CLEAN EXPORT MAP RENDER ---------- */
-
-async function renderExportMapImage() {
-  const wrap = document.getElementById("export-map-wrapper");
-  const mapDiv = document.getElementById("export-map");
-
-  wrap.style.display = "block";
-  mapDiv.innerHTML = "";
-
-  const tx = state.txMarker.getLatLng();
-  const rx = state.rxMarker.getLatLng();
-
-  const m = L.map(mapDiv, {
-    zoomControl: false,
-    attributionControl: false,
-    dragging: false,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    boxZoom: false,
-    keyboard: false
-  });
-
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19
-  }).addTo(m);
-
-  const pts = [tx, rx];
-  if (state.relay) pts.push(state.relay.latlng);
-
-  pts.forEach(p => {
-    L.circleMarker(p, {
-      radius: 7,
-      color: "#000",
-      weight: 2,
-      fillColor: "#1f6feb",
-      fillOpacity: 1
-    }).addTo(m);
-  });
-
-  L.polyline(pts, {
-    color: "#1f6feb",
-    weight: 4
-  }).addTo(m);
-
-  const bounds = L.latLngBounds(pts);
-  m.fitBounds(bounds.pad(0.35));
-
-  await new Promise(r => setTimeout(r, 700));
-  m.invalidateSize();
-
-  const canvas = await html2canvas(mapDiv, {
-    scale: 2,
-    backgroundColor: "#ffffff",
-    useCORS: true
-  });
-
-  m.remove();
-  wrap.style.display = "none";
-
-  return canvas.toDataURL("image/png");
-}
