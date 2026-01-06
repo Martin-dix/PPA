@@ -1867,139 +1867,171 @@ function osGridRefFromEN(E, N, digits = 10) {
 function degToRad(d) { return d * Math.PI / 180; }
 function radToDeg(r) { return r * 180 / Math.PI; }
 
-/* ===================== PDF Export (Print-to-PDF) ===================== */
+/* =========================================================
+   PDF REPORT EXPORT — CLEAN MAP + SUMMARY + PROFILE
+   ========================================================= */
 
-function exportPdfReport() {
+async function generatePDFReport() {
   if (!state.txMarker || !state.rxMarker) {
     alert("Place Tx and Rx first.");
     return;
   }
 
-  const run = async () => {
-    // Ensure analysis exists
-    await analyzePath();
+  showLoading(true);
 
-    const html = buildReportHTML();
-    const w = window.open("", "_blank");
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-    if (!w) {
-      alert("Popup blocked. Allow popups for PDF export.");
-      return;
+    const margin = 12;
+    let y = margin;
+
+    /* ---------- HEADER ---------- */
+    pdf.setFontSize(16);
+    pdf.text("RF Path Analysis Report", margin, y);
+    y += 8;
+
+    pdf.setFontSize(10);
+    pdf.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+    y += 6;
+
+    /* ---------- TX / RX LOCATIONS ---------- */
+    const tx = state.txMarker.getLatLng();
+    const rx = state.rxMarker.getLatLng();
+    const bothUK = isInUK(tx) && isInUK(rx);
+
+    const txStr = bothUK ? toBNG(tx, 10) : `${tx.lat.toFixed(5)}, ${tx.lng.toFixed(5)}`;
+    const rxStr = bothUK ? toBNG(rx, 10) : `${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)}`;
+
+    pdf.setFontSize(11);
+    pdf.text(`Tx: ${txStr}`, margin, y); y += 6;
+    pdf.text(`Rx: ${rxStr}`, margin, y); y += 6;
+
+    if (state.relay) {
+      const r = state.relay.latlng;
+      const rStr = bothUK ? toBNG(r, 10) : `${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
+      pdf.text(`Relay: ${rStr}`, margin, y);
+      y += 6;
     }
 
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    w.focus();
+    y += 4;
 
-    // Give charts time to render
-    setTimeout(() => w.print(), 600);
-  };
+    /* ---------- CLEAN EXPORT MAP ---------- */
+    const mapImg = await renderExportMapImage();
+    pdf.setFontSize(12);
+    pdf.text("Map", margin, y);
+    y += 4;
 
-  run().catch(err => {
-    console.error(err);
-    alert("PDF export failed. See console for details.");
-  });
+    pdf.addImage(mapImg, "PNG", margin, y, 186, 95);
+    y += 100;
+
+    /* ---------- LINK SUMMARY ---------- */
+    const crit = document.getElementById("critical");
+    if (crit && !crit.classList.contains("hidden")) {
+      pdf.setFontSize(12);
+      pdf.text("Link Summary", margin, y);
+      y += 4;
+
+      const summaryCanvas = await html2canvas(crit, {
+        scale: 2,
+        backgroundColor: "#ffffff"
+      });
+
+      const img = summaryCanvas.toDataURL("image/png");
+      const h = (summaryCanvas.height / summaryCanvas.width) * 186;
+      pdf.addImage(img, "PNG", margin, y, 186, h);
+      y += h + 4;
+    }
+
+    /* ---------- ELEVATION PROFILE ---------- */
+    const chart = document.getElementById("elevation-profile");
+    if (chart) {
+      pdf.addPage();
+      y = margin;
+
+      pdf.setFontSize(12);
+      pdf.text("Elevation Profile", margin, y);
+      y += 4;
+
+      const chartCanvas = await html2canvas(chart, {
+        scale: 2,
+        backgroundColor: "#ffffff"
+      });
+
+      const img = chartCanvas.toDataURL("image/png");
+      const h = (chartCanvas.height / chartCanvas.width) * 186;
+      pdf.addImage(img, "PNG", margin, y, 186, h);
+    }
+
+    /* ---------- SAVE ---------- */
+    pdf.save(`rf-path-report-${Date.now()}.pdf`);
+
+  } catch (e) {
+    console.error(e);
+    alert("PDF generation failed — see console.");
+  } finally {
+    showLoading(false);
+  }
 }
 
-function buildReportHTML() {
+/* ---------- CLEAN EXPORT MAP RENDER ---------- */
+
+async function renderExportMapImage() {
+  const wrap = document.getElementById("export-map-wrapper");
+  const mapDiv = document.getElementById("export-map");
+
+  wrap.style.display = "block";
+  mapDiv.innerHTML = "";
+
   const tx = state.txMarker.getLatLng();
   const rx = state.rxMarker.getLatLng();
-  const relay = state.relay?.latlng || null;
 
-  const inputs = readInputs();
-  const bothUK = isInUK(tx) && isInUK(rx);
+  const m = L.map(mapDiv, {
+    zoomControl: false,
+    attributionControl: false,
+    dragging: false,
+    scrollWheelZoom: false,
+    doubleClickZoom: false,
+    boxZoom: false,
+    keyboard: false
+  });
 
-  const fmt = (p) =>
-    bothUK ? toBNG(p, 10) : toMGRS(p, 5);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19
+  }).addTo(m);
 
-  const distKm = haversineKm(tx, rx).toFixed(2);
-  const bearing = bearingDeg(tx, rx).toFixed(0);
+  const pts = [tx, rx];
+  if (state.relay) pts.push(state.relay.latlng);
 
-  const chartCanvas = document.getElementById("elevation-profile");
-  const chartImg = chartCanvas
-    ? chartCanvas.toDataURL("image/png", 1.0)
-    : null;
+  pts.forEach(p => {
+    L.circleMarker(p, {
+      radius: 7,
+      color: "#000",
+      weight: 2,
+      fillColor: "#1f6feb",
+      fillOpacity: 1
+    }).addTo(m);
+  });
 
-  const criticalHTML = el("critical")?.innerHTML || "";
+  L.polyline(pts, {
+    color: "#1f6feb",
+    weight: 4
+  }).addTo(m);
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>RF Path Analyser – Report</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    margin: 24px;
-    color: #000;
-  }
-  h1, h2 {
-    margin-bottom: 6px;
-  }
-  h1 { font-size: 20px; }
-  h2 { font-size: 15px; margin-top: 18px; }
-  .block {
-    margin-top: 12px;
-  }
-  .kv {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    row-gap: 4px;
-    column-gap: 10px;
-    font-size: 12px;
-  }
-  img {
-    max-width: 100%;
-    page-break-inside: avoid;
-  }
-  .critical {
-    border: 1px solid #444;
-    padding: 10px;
-    margin-top: 8px;
-    font-size: 12px;
-  }
-  .pagebreak {
-    page-break-before: always;
-  }
-</style>
-</head>
-<body>
+  const bounds = L.latLngBounds(pts);
+  m.fitBounds(bounds.pad(0.35));
 
-<h1>RF Path Analyser – Link Report</h1>
+  await new Promise(r => setTimeout(r, 700));
+  m.invalidateSize();
 
-<div class="block kv">
-  <div><b>Tx</b></div><div>${fmt(tx)} (${tx.lat.toFixed(5)}, ${tx.lng.toFixed(5)})</div>
-  <div><b>Rx</b></div><div>${fmt(rx)} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})</div>
-  <div><b>Relay</b></div><div>${relay ? fmt(relay) : "None"}</div>
-  <div><b>Distance</b></div><div>${distKm} km</div>
-  <div><b>Bearing</b></div><div>${bearing}°</div>
-</div>
+  const canvas = await html2canvas(mapDiv, {
+    scale: 2,
+    backgroundColor: "#ffffff",
+    useCORS: true
+  });
 
-<h2>Inputs</h2>
-<div class="kv">
-  <div>Frequency</div><div>${inputs.freqMHz} MHz</div>
-  <div>Tx / Rx Height</div><div>${inputs.txHeight_m} m / ${inputs.rxHeight_m} m</div>
-  <div>Tx Power</div><div>${inputs.txPowerW} W</div>
-  <div>Antenna Gain</div><div>${inputs.antGainDb} dBi</div>
-  <div>System Loss</div><div>${inputs.sysLossDb} dB</div>
-  <div>Rx Sens + Fade</div><div>${inputs.rxSensDbm} dBm + ${inputs.fadeMarginDb} dB</div>
-  <div>Terrain</div><div>${inputs.terrain}</div>
-  <div>Fresnel</div><div>${Math.round(inputs.fresnelFactor * 100)}%</div>
-  <div>k-factor</div><div>${inputs.kFactor}</div>
-  <div>Rule</div><div>${inputs.successRule}</div>
-</div>
+  m.remove();
+  wrap.style.display = "none";
 
-<h2>Link Summary</h2>
-<div class="critical">${criticalHTML}</div>
-
-<div class="pagebreak"></div>
-
-<h2>Elevation Profile</h2>
-${chartImg ? `<img src="${chartImg}">` : "<p>No chart available</p>"}
-
-</body>
-</html>
-`;
+  return canvas.toDataURL("image/png");
 }
