@@ -1,3 +1,4 @@
+
 /* =========================================================
    RF Path Analyser – Professional Dark Theme
    ========================================================= */
@@ -8,8 +9,9 @@ html, body {
   height: 100%;
   background: #000;
   color: #e6edf3;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  overflow: hidden;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden; /* app feel; panels scroll instead */
 }
 
 .container {
@@ -33,6 +35,7 @@ header {
 header h1 {
   font-size: 1.5rem;
   font-weight: 800;
+  letter-spacing: 0.4px;
 }
 
 .tools { display: flex; gap: 10px; }
@@ -43,7 +46,6 @@ header h1 {
   background: #161b22;
   color: #e6edf3;
   cursor: pointer;
-  font-weight: 700;
 }
 .tools button:hover { background: #21262d; }
 
@@ -53,6 +55,7 @@ header h1 {
   border-radius: 16px;
   text-align: center;
   font-weight: 800;
+  letter-spacing: 0.2px;
   border: 1px solid rgba(255,255,255,0.06);
   white-space: nowrap;
   overflow: hidden;
@@ -71,8 +74,12 @@ header h1 {
   border-radius: 16px;
   padding: 12px;
   overflow-y: auto;
+  min-height: 0;
   border: 1px solid rgba(255,255,255,0.06);
 }
+.controls::-webkit-scrollbar { width: 10px; }
+.controls::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+.controls::-webkit-scrollbar-track { background: #0d1117; }
 
 .card {
   background: #161b22;
@@ -85,8 +92,17 @@ header h1 {
 .card h2 {
   color: #58a6ff;
   margin-bottom: 12px;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 800;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 8px;
+}
+
+.hint {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #c9d1d9;
+  line-height: 1.4;
 }
 
 label {
@@ -98,37 +114,80 @@ label {
 
 input, select, button {
   width: 100%;
-  margin-top: 6px;
-  padding: 10px;
+  margin-top: 8px;
+  padding: 12px;
   background: #0d1117;
   color: #e6edf3;
   border: 1px solid #30363d;
-  border-radius: 10px;
+  border-radius: 12px;
+  font-size: 0.95rem;
 }
+
+input:focus, select:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.row { display: flex; gap: 10px; }
+
+button { background: #21262d; cursor: pointer; font-weight: 700; }
+button:hover { background: #30363d; }
 
 button.big {
   background: linear-gradient(135deg, #1f6feb, #388bfd);
+  font-size: 1.05rem;
   font-weight: 900;
-  height: 46px;
+  height: 48px;
 }
 
 button.secondary { background: #21262d; }
 
 .map-panel {
+  position: relative;
   background: #0d1117;
   border-radius: 16px;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
   border: 1px solid rgba(255,255,255,0.06);
   overflow-y: auto;
 }
+
+.map-panel::-webkit-scrollbar { width: 10px; }
+.map-panel::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+.map-panel::-webkit-scrollbar-track { background: #0d1117; }
 
 #map {
   width: 100%;
   height: clamp(320px, 55vh, 560px);
   border-radius: 16px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.map-readout{
+  position: absolute;
+  z-index: 500;
+  right: 22px;
+  top: 18px;
+  background: rgba(13,17,23,0.92);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  line-height: 1.25;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  pointer-events: none;
+  max-width: 340px;
+  white-space: nowrap;
 }
 
 .results-panel {
@@ -136,18 +195,50 @@ button.secondary { background: #21262d; }
   border-radius: 16px;
   padding: 12px;
   border: 1px solid rgba(255,255,255,0.06);
+  flex: 0 0 auto;
+}
+
+#critical {
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  font-size: 0.95rem;
+}
+
+#critical.good {
+  border-color: rgba(0, 255, 102, 0.45);
+  box-shadow: 0 0 0 1px rgba(0, 255, 102, 0.15) inset;
+}
+#critical.marginal {
+  border-color: rgba(255, 170, 0, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 170, 0, 0.18) inset;
+}
+#critical.poor {
+  border-color: rgba(255, 51, 68, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 51, 68, 0.18) inset;
 }
 
 .chart-wrap {
   height: 260px;
+  width: 100%;
+  position: relative;
+}
+
+#elevation-profile {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 footer {
   text-align: center;
-  padding: 10px;
+  padding: 10px 12px;
   background: #161b22;
   border-radius: 16px;
-  font-size: 0.85rem;
+  color: #c9d1d9;
+  font-size: 0.9rem;
   border: 1px solid rgba(255,255,255,0.06);
 }
 
@@ -159,7 +250,7 @@ footer {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   z-index: 10000;
 }
 
@@ -177,19 +268,72 @@ footer {
 
 .hidden { display: none !important; }
 
-/* ===================== PDF export only ===================== */
-
-.pdf-only {
-  position: absolute;
-  left: -99999px;
-  top: 0;
-  width: 900px;
-  background: #fff;
-  color: #000;
+/* Leaflet legend */
+.rf-legend {
+  background: rgba(13, 17, 23, 0.92);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #e6edf3;
+  font-size: 0.88rem;
+  line-height: 1.25;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  min-width: 190px;
 }
 
-#export-map {
-  width: 900px;
-  height: 500px;
-  border: 1px solid #ccc;
+.rf-legend .title {
+  font-weight: 900;
+  margin-bottom: 8px;
+  color: #58a6ff;
+}
+
+.rf-legend .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.rf-legend .swatch {
+  width: 18px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.rf-legend .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+/* High points icon */
+.high-point-icon {
+  color: #ffd400;
+  font-size: 26px;
+  font-weight: 900;
+  text-shadow:
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+    -1px  1px 0 #000,
+     1px  1px 0 #000,
+     0 0 10px rgba(0,0,0,0.9);
+  pointer-events: none;
+}
+
+/* Relay list items */
+.relay-item{
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  background: rgba(13,17,23,0.6);
+  cursor: pointer;
+}
+.relay-item:hover{ background: rgba(13,17,23,0.85); }
+.relay-item b{ color:#58a6ff; }
+
+@media (max-width: 1100px) {
+  .main { grid-template-columns: 1fr; }
+  .controls { max-height: 45vh; }
+  .chart-wrap { height: 220px; }
 }
