@@ -46,7 +46,7 @@ function wireUI() {
   el("units").addEventListener("change", updateSummary);
 
   el("copy-btn").addEventListener("click", copySummary);
-  el("pdf-btn").addEventListener("click", exportPdfReport);
+el("pdf-btn").addEventListener("click", generatePDFReport);
 
   el("save-btn").addEventListener("click", saveProject);
   el("load-btn").addEventListener("click", () => el("load-file").click());
