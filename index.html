@@ -12,6 +12,10 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+  <!-- PDF report -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -24,7 +28,7 @@
         <button id="copy-btn" title="Copy summary">📋</button>
         <button id="save-btn" title="Save project">💾</button>
         <button id="load-btn" title="Load project">📂</button>
-        <button id="print-btn" title="Print">🖨️</button>
+        <button id="pdf-btn" title="Generate PDF report">📄</button>
       </div>
     </header>
 
@@ -47,7 +51,7 @@
           </div>
           <p class="hint">
             Click map to place <b>Tx</b>, then <b>Rx</b>. Markers are draggable.
-            <br>Relay is optional: scan corridor then “Use Best Relay” or click a suggestion.
+            <br>Relay is optional.
           </p>
         </div>
 
@@ -71,21 +75,19 @@
           <div class="two-col">
             <div>
               <label>Tx Power (W)</label>
-              <input id="txPowerW" type="number" value="50" step="1" min="0.1" />
+              <input id="txPowerW" type="number" value="50" step="1" />
             </div>
             <div>
               <label>System Loss (dB)</label>
-              <input id="sysLossDb" type="number" value="2" step="0.5" min="0" />
+              <input id="sysLossDb" type="number" value="2" step="0.5" />
             </div>
           </div>
 
           <label>Antenna Preset (planning gain, dBi)</label>
           <select id="antenna-preset">
             <option value="hcdr_elev_3_5" selected>HCDR Elevated (3.5 dBi)</option>
-            <option value="vhf_mono_2_5">VHF Monopole / Whip (2.5 dBi)</option>
+            <option value="vhf_mono_2_5">VHF Monopole (2.5 dBi)</option>
             <option value="vhf_dipole_3_0">VHF Dipole (3.0 dBi)</option>
-            <option value="ref_dipole_2_15">Reference: ½-wave dipole (2.15 dBi)</option>
-            <option value="ref_mono_5_15">Reference: ¼-wave monopole ideal (5.15 dBi)</option>
             <option value="custom">Custom…</option>
           </select>
 
@@ -101,7 +103,7 @@
             </div>
             <div>
               <label>Fade Margin (dB)</label>
-              <input id="fadeMarginDb" type="number" value="15" step="1" min="0" />
+              <input id="fadeMarginDb" type="number" value="15" step="1" />
             </div>
           </div>
 
@@ -115,16 +117,15 @@
 
           <label>Fresnel Requirement</label>
           <select id="fresnel-req">
-            <option value="0">0% (LOS only)</option>
-            <option value="0.6" selected>60% (recommended)</option>
-            <option value="1">100% (full 1st zone)</option>
+            <option value="0">0%</option>
+            <option value="0.6" selected>60%</option>
+            <option value="1">100%</option>
           </select>
 
           <label>Earth Curvature (k-factor)</label>
           <select id="kfactor">
-            <option value="1">1.0 (geometric)</option>
-            <option value="1.3333333333" selected>4/3 (standard)</option>
-            <option value="2">2.0 (super-refractive)</option>
+            <option value="1">1.0</option>
+            <option value="1.3333333333" selected>4/3</option>
           </select>
 
           <label>Success Rule</label>
@@ -133,18 +134,17 @@
             <option value="margin_fresnel">Margin + Fresnel</option>
           </select>
 
-          <label>Height Solve Mode (max mast 11.4 m)</label>
+          <label>Height Solve Mode</label>
           <select id="height-solve">
-            <option value="both" selected>Raise Tx and Rx equally</option>
+            <option value="both" selected>Raise Tx and Rx</option>
             <option value="tx">Raise Tx only</option>
             <option value="rx">Raise Rx only</option>
-            <option value="taller">Raise taller mast only</option>
           </select>
 
           <label>Units</label>
           <select id="units">
-            <option value="metric" selected>Metric (km, m)</option>
-            <option value="imperial">Imperial (mi, ft)</option>
+            <option value="metric" selected>Metric</option>
+            <option value="imperial">Imperial</option>
           </select>
         </div>
 
@@ -152,14 +152,6 @@
           <h2>Actions</h2>
           <button id="analyze" class="big">Analyse Path</button>
           <button id="reverse" class="secondary">Reverse Path</button>
-
-          <button id="highpoints-btn" class="secondary">View High Points (Top 10 in View)</button>
-          <button id="clear-highpoints-btn" class="secondary">Clear High Points</button>
-
-          <button id="suggest-relays-btn" class="secondary">Suggest Relays (Corridor Scan)</button>
-          <button id="use-best-relay-btn" class="secondary">Use Best Relay</button>
-
-          <div id="relay-list" class="hint"></div>
         </div>
 
         <input id="load-file" type="file" accept="application/json" class="hidden" />
@@ -178,8 +170,8 @@
       </section>
     </div>
 
-    <footer id="sunrise-sunset">
-      Online DEM: Open-Elevation • Models: FSPL + curvature (k) + knife-edge + Fresnel • Max mast: 11.4 m
+    <footer>
+      RF Path Analyser
     </footer>
   </div>
 
