@@ -682,7 +682,6 @@ async function analyzeDirect() {
 
     drawElevationChart(profile, inputs, fr, diff);
 
-    document.querySelector(".chart-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => state.map.invalidateSize(), 50);
 
   } finally {
@@ -756,7 +755,6 @@ async function analyzeViaRelay() {
     const worst = a1.margin_dB <= a2.margin_dB ? a1 : a2;
     drawElevationChart(worst.profile, inputs, worst.fr, worst.diff);
 
-    document.querySelector(".chart-wrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
     setTimeout(() => state.map.invalidateSize(), 50);
 
   } finally {
