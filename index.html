@@ -12,6 +12,10 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+  <!-- jsPDF + html2canvas for PDF Report -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -24,7 +28,7 @@
         <button id="copy-btn" title="Copy summary">📋</button>
         <button id="save-btn" title="Save project">💾</button>
         <button id="load-btn" title="Load project">📂</button>
-        <button id="print-btn" title="Print">🖨️</button>
+        <button id="pdf-report-btn" title="Generate PDF Report">📄 PDF Report</button>
       </div>
     </header>
 
