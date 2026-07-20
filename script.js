@@ -1872,27 +1872,24 @@ function radToDeg(r) { return r * 180 / Math.PI; }
 // ===================== PDF Report =====================
 async function generatePDFReport() {
   if (!state.txMarker || !state.rxMarker) {
-    alert('Place Tx and Rx markers and run "Analyse Path" first.');
+    alert('Place Tx and Rx and Analyse first.');
     return;
   }
-
   showLoading(true);
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pw = pdf.internal.pageSize.getWidth();
+    let y = 15;
 
-    let y = 20;
-
-    // Header
-    pdf.setFontSize(22);
-    pdf.text('RF Path Analyser Report', pageWidth / 2, y, { align: 'center' });
+    pdf.setFontSize(24);
+    pdf.text('RF Path Analyser Report', pw / 2, y, { align: 'center' });
     y += 10;
-    pdf.setFontSize(12);
-    pdf.text(new Date().toLocaleString(), pageWidth / 2, y, { align: 'center' });
-    y += 20;
+    pdf.setFontSize(11);
+    pdf.text(new Date().toLocaleString(), pw / 2, y, { align: 'center' });
+    y += 15;
 
-    // Sites
+    // Sites + Summary
     const tx = state.txMarker.getLatLng();
     const rx = state.rxMarker.getLatLng();
     const txGrid = isInUK(tx) ? toBNG(tx, 10) : toMGRS(tx, 5);
@@ -1907,27 +1904,34 @@ async function generatePDFReport() {
     pdf.text(`Rx: ${rxGrid} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})`, 25, y);
     y += 15;
 
-    // Map Capture
-    pdf.text('Map View', 20, y);
-    y += 8;
-    const mapCanvas = await html2canvas(document.getElementById('map'), { scale: 1.5 });
-    pdf.addImage(mapCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 100);
-    y += 110;
-
-    // Chart
-    const chartEl = document.getElementById('elevation-profile');
-    if (chartEl) {
-      pdf.text('Elevation Profile', 20, y);
+    // Critical summary if available
+    const crit = el('critical');
+    if (!crit.classList.contains('hidden')) {
+      pdf.text('Link Summary', 20, y);
       y += 8;
-      const chartCanvas = await html2canvas(chartEl, { scale: 2 });
-      pdf.addImage(chartCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 70);
-      y += 80;
+      pdf.setFontSize(10);
+      pdf.text(crit.innerText.substring(0, 200) + '...', 25, y); // simplified
+      y += 20;
     }
 
+    // Map (improved)
+    pdf.setFontSize(14);
+    pdf.text('Map View', 20, y);
+    y += 8;
+    const mapCanvas = await html2canvas(document.getElementById('map'), {scale: 2, useCORS: true, logging: false});
+    pdf.addImage(mapCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 95);
+    y += 105;
+
+    // Elevation Profile
+    pdf.text('Elevation Profile', 20, y);
+    y += 8;
+    const chartCanvas = await html2canvas(document.getElementById('elevation-profile'), {scale: 2});
+    pdf.addImage(chartCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 70);
+
     pdf.save(`RF-Path-Report-${new Date().toISOString().slice(0,10)}.pdf`);
-  } catch (err) {
-    console.error(err);
-    alert('PDF generation failed: ' + err.message);
+  } catch (e) {
+    console.error(e);
+    alert('PDF error: ' + e.message);
   } finally {
     showLoading(false);
   }
