@@ -1955,15 +1955,20 @@ async function generatePDFReport() {
     y += 8;
     const mapCanvas = await html2canvas(document.getElementById('map'), { scale: 1.8, useCORS: true, logging: false });
     pdf.addImage(mapCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 95);
-    y += 105;
+    y += 105; // after map
 
-    // Elevation
+    // Force new page for chart if needed
+    if (y > 180) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    // Elevation Profile
     pdf.setFontSize(14);
     pdf.text('Elevation Profile', 20, y);
     y += 8;
     const chartCanvas = await html2canvas(document.getElementById('elevation-profile'), { scale: 2 });
     pdf.addImage(chartCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 65);
-    y += 75;
 
     // Footer
     pdf.setFontSize(10);
