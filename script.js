@@ -1906,22 +1906,42 @@ async function generatePDFReport() {
     pdf.text(`Rx: ${rxGrid} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})`, 25, y);
     y += 15;
 
-     // Full Link Summary (clean extraction)
+        // Clean Link Summary as Table
     const crit = el('critical');
     if (!crit.classList.contains('hidden')) {
       pdf.setFontSize(14);
       pdf.text('Link Summary', 20, y);
-      y += 8;
-      pdf.setFontSize(10);
+      y += 10;
+
+      pdf.setFontSize(11);
+      pdf.setDrawColor(200);
       
-      // Clean text - remove excessive HTML artifacts
-      let summaryText = crit.innerText || crit.textContent || '';
-      summaryText = summaryText.replace(/\s+/g, ' ').trim();
-      const lines = pdf.splitTextToSize(summaryText, pw - 40);
-      pdf.text(lines, 25, y);
-      y += lines.length * 5 + 10;
+      // Parse key lines (simple regex for common fields)
+      const text = crit.innerText || '';
+      const distanceMatch = text.match(/Distance:?\s*([\d.]+)/i);
+      const bearingMatch = text.match(/Bearing:?\s*([\d]+)/i);
+      const marginMatch = text.match(/Margin:?\s*([-\d.]+)/i);
+      const status = text.includes('GOOD') ? 'GOOD' : text.includes('MARGINAL') ? 'MARGINAL' : 'POOR';
+
+      const tableData = [
+        ['Status', status],
+        ['Distance', distanceMatch ? distanceMatch[1] + ' km' : 'N/A'],
+        ['Bearing', bearingMatch ? bearingMatch[1] + '°' : 'N/A'],
+        ['Margin', marginMatch ? marginMatch[1] + ' dB' : 'N/A'],
+      ];
+
+      // Draw simple table
+      let tableY = y;
+      pdf.setFontSize(10);
+      tableData.forEach(([label, value], i) => {
+        pdf.text(label, 25, tableY);
+        pdf.text(value, 80, tableY);
+        tableY += 8;
+        if (i < tableData.length - 1) pdf.line(25, tableY - 4, pw - 25, tableY - 4);
+      });
+      y = tableY + 10;
     } else {
-      pdf.text('Run "Analyse Path" for Link Summary', 20, y);
+      pdf.text('Run Analyse Path for full Link Summary', 20, y);
       y += 15;
     }
 
