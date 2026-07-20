@@ -47,6 +47,7 @@ function wireUI() {
 
   el("copy-btn").addEventListener("click", copySummary);
   el("print-btn").addEventListener("click", () => window.print());
+     el("pdf-report-btn").addEventListener("click", generatePDFReport);
 
   el("save-btn").addEventListener("click", saveProject);
   el("load-btn").addEventListener("click", () => el("load-file").click());
@@ -1866,3 +1867,67 @@ function osGridRefFromEN(E, N, digits = 10) {
 
 function degToRad(d) { return d * Math.PI / 180; }
 function radToDeg(r) { return r * 180 / Math.PI; }
+
+// ===================== PDF Report =====================
+async function generatePDFReport() {
+  if (!state.txMarker || !state.rxMarker) {
+    alert('Place Tx and Rx markers and run "Analyse Path" first.');
+    return;
+  }
+
+  showLoading(true);
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+
+    let y = 20;
+
+    // Header
+    pdf.setFontSize(22);
+    pdf.text('RF Path Analyser Report', pageWidth / 2, y, { align: 'center' });
+    y += 10;
+    pdf.setFontSize(12);
+    pdf.text(new Date().toLocaleString(), pageWidth / 2, y, { align: 'center' });
+    y += 20;
+
+    // Sites
+    const tx = state.txMarker.getLatLng();
+    const rx = state.rxMarker.getLatLng();
+    const txGrid = isInUK(tx) ? toBNG(tx, 10) : toMGRS(tx, 5);
+    const rxGrid = isInUK(rx) ? toBNG(rx, 10) : toMGRS(rx, 5);
+
+    pdf.setFontSize(14);
+    pdf.text('Site Locations', 20, y);
+    y += 8;
+    pdf.setFontSize(11);
+    pdf.text(`Tx: ${txGrid} (${tx.lat.toFixed(5)}, ${tx.lng.toFixed(5)})`, 25, y);
+    y += 6;
+    pdf.text(`Rx: ${rxGrid} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})`, 25, y);
+    y += 15;
+
+    // Map Capture
+    pdf.text('Map View', 20, y);
+    y += 8;
+    const mapCanvas = await html2canvas(document.getElementById('map'), { scale: 1.5 });
+    pdf.addImage(mapCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 100);
+    y += 110;
+
+    // Chart
+    const chartEl = document.getElementById('elevation-profile');
+    if (chartEl) {
+      pdf.text('Elevation Profile', 20, y);
+      y += 8;
+      const chartCanvas = await html2canvas(chartEl, { scale: 2 });
+      pdf.addImage(chartCanvas.toDataURL('image/png'), 'PNG', 20, y, 170, 70);
+      y += 80;
+    }
+
+    pdf.save(`RF-Path-Report-${new Date().toISOString().slice(0,10)}.pdf`);
+  } catch (err) {
+    console.error(err);
+    alert('PDF generation failed: ' + err.message);
+  } finally {
+    showLoading(false);
+  }
+}
