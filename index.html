@@ -17,14 +17,18 @@
 
 <body>
   <div class="container">
-
+    
+  <!-- jsPDF + html2canvas for PDF Report -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
     <header>
       <h1>RF Path Analyser</h1>
       <div class="tools">
         <button id="copy-btn" title="Copy summary">📋</button>
         <button id="save-btn" title="Save project">💾</button>
         <button id="load-btn" title="Load project">📂</button>
-        <button id="print-btn" title="Print">🖨️</button>
+               <button id="pdf-report-btn" title="Generate PDF Report">📄 PDF Report</button>
       </div>
     </header>
 
