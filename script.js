@@ -1906,18 +1906,17 @@ async function generatePDFReport() {
     pdf.text(`Rx: ${rxGrid} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})`, 25, y);
     y += 15;
 
-        // Clean Link Summary as Table
-    // Enhanced Link Summary Table
+    // Enhanced Compact Link Summary Table
     const crit = el('critical');
     if (!crit.classList.contains('hidden')) {
       pdf.setFontSize(14);
       pdf.text('Link Summary', 20, y);
       y += 10;
 
-      pdf.setFontSize(10);
+      pdf.setFontSize(9); // Smaller for more info
       pdf.setDrawColor(200);
 
-      const inputs = readInputs(); // Reuse existing function for params
+      const inputs = readInputs();
       const tx = state.txMarker.getLatLng();
       const rx = state.rxMarker.getLatLng();
 
@@ -1926,30 +1925,29 @@ async function generatePDFReport() {
         ['Tx Height', inputs.txHeight_m + ' m'],
         ['Rx Height', inputs.rxHeight_m + ' m'],
         ['Tx Power', inputs.txPowerW + ' W'],
-        ['Distance', (haversineKm(tx, rx)).toFixed(2) + ' km'],
+        ['Distance', haversineKm(tx, rx).toFixed(2) + ' km'],
         ['Bearing', bearingDeg(tx, rx).toFixed(0) + '°'],
       ];
 
-      // Add from critical box
       const text = crit.innerText || '';
       const marginMatch = text.match(/Margin:?\s*([-\d.]+)/i);
       const status = text.includes('GOOD') ? 'GOOD' : text.includes('MARGINAL') ? 'MARGINAL' : 'POOR';
 
-      tableData.push(['Link Status', status]);
+      tableData.push(['Status', status]);
       if (marginMatch) tableData.push(['Margin', marginMatch[1] + ' dB']);
 
-      // Draw table
+      // Draw compact table
       let tableY = y;
       tableData.forEach(([label, value], i) => {
         pdf.text(label + ':', 25, tableY);
-        pdf.text(String(value), 90, tableY);
-        tableY += 8;
-        if (i < tableData.length - 1) pdf.line(25, tableY - 4, pw - 25, tableY - 4);
+        pdf.text(String(value), 85, tableY); // Adjusted column
+        tableY += 6.5; // Tighter line spacing
+        if (i < tableData.length - 1) pdf.line(25, tableY - 3, pw - 25, tableY - 3);
       });
-      y = tableY + 15;
+      y = tableY + 12; // Space before map
     } else {
-      pdf.text('Run Analyse Path for full details', 20, y);
-      y += 15;
+      pdf.text('Run Analyse Path for details', 20, y);
+      y += 12;
     }
     // Map
     pdf.setFontSize(14);
