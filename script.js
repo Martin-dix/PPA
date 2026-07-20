@@ -1,5 +1,5 @@
 /* =========================================================
-   RF Path Analyser – Online DEM + Fresnel + Diffraction + Relays
+   RF Path Analyser – Online DEM + Fresnel + Diffraction + Relays 
    Elevation backend: Open-Meteo (primary) + Open-Elevation (fallback)
    ========================================================= */
 
