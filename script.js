@@ -46,8 +46,8 @@ function wireUI() {
   el("units").addEventListener("change", updateSummary);
 
   el("copy-btn").addEventListener("click", copySummary);
-  el("print-btn").addEventListener("click", () => window.print());
-       const pdfBtn = el("pdf-report-btn");
+  // Safe PDF
+  const pdfBtn = el("pdf-report-btn");
   if (pdfBtn) pdfBtn.addEventListener("click", generatePDFReport);
 
   el("save-btn").addEventListener("click", saveProject);
