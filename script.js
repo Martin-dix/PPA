@@ -1907,44 +1907,50 @@ async function generatePDFReport() {
     y += 15;
 
         // Clean Link Summary as Table
+    // Enhanced Link Summary Table
     const crit = el('critical');
     if (!crit.classList.contains('hidden')) {
       pdf.setFontSize(14);
       pdf.text('Link Summary', 20, y);
       y += 10;
 
-      pdf.setFontSize(11);
+      pdf.setFontSize(10);
       pdf.setDrawColor(200);
-      
-      // Parse key lines (simple regex for common fields)
+
+      const inputs = readInputs(); // Reuse existing function for params
+      const tx = state.txMarker.getLatLng();
+      const rx = state.rxMarker.getLatLng();
+
+      const tableData = [
+        ['Frequency', inputs.freqMHz + ' MHz'],
+        ['Tx Height', inputs.txHeight_m + ' m'],
+        ['Rx Height', inputs.rxHeight_m + ' m'],
+        ['Tx Power', inputs.txPowerW + ' W'],
+        ['Distance', (haversineKm(tx, rx)).toFixed(2) + ' km'],
+        ['Bearing', bearingDeg(tx, rx).toFixed(0) + '°'],
+      ];
+
+      // Add from critical box
       const text = crit.innerText || '';
-      const distanceMatch = text.match(/Distance:?\s*([\d.]+)/i);
-      const bearingMatch = text.match(/Bearing:?\s*([\d]+)/i);
       const marginMatch = text.match(/Margin:?\s*([-\d.]+)/i);
       const status = text.includes('GOOD') ? 'GOOD' : text.includes('MARGINAL') ? 'MARGINAL' : 'POOR';
 
-      const tableData = [
-        ['Status', status],
-        ['Distance', distanceMatch ? distanceMatch[1] + ' km' : 'N/A'],
-        ['Bearing', bearingMatch ? bearingMatch[1] + '°' : 'N/A'],
-        ['Margin', marginMatch ? marginMatch[1] + ' dB' : 'N/A'],
-      ];
+      tableData.push(['Link Status', status]);
+      if (marginMatch) tableData.push(['Margin', marginMatch[1] + ' dB']);
 
-      // Draw simple table
+      // Draw table
       let tableY = y;
-      pdf.setFontSize(10);
       tableData.forEach(([label, value], i) => {
-        pdf.text(label, 25, tableY);
-        pdf.text(value, 80, tableY);
+        pdf.text(label + ':', 25, tableY);
+        pdf.text(String(value), 90, tableY);
         tableY += 8;
         if (i < tableData.length - 1) pdf.line(25, tableY - 4, pw - 25, tableY - 4);
       });
-      y = tableY + 10;
+      y = tableY + 15;
     } else {
-      pdf.text('Run Analyse Path for full Link Summary', 20, y);
+      pdf.text('Run Analyse Path for full details', 20, y);
       y += 15;
     }
-
     // Map
     pdf.setFontSize(14);
     pdf.text('Map View', 20, y);
