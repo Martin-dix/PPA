@@ -1906,20 +1906,22 @@ async function generatePDFReport() {
     pdf.text(`Rx: ${rxGrid} (${rx.lat.toFixed(5)}, ${rx.lng.toFixed(5)})`, 25, y);
     y += 15;
 
-    // Full Link Summary from critical box
+     // Full Link Summary (clean extraction)
     const crit = el('critical');
     if (!crit.classList.contains('hidden')) {
       pdf.setFontSize(14);
       pdf.text('Link Summary', 20, y);
       y += 8;
       pdf.setFontSize(10);
-      const summaryText = crit.innerText.replace(/\s+/g, ' ').substring(0, 800);
+      
+      // Clean text - remove excessive HTML artifacts
+      let summaryText = crit.innerText || crit.textContent || '';
+      summaryText = summaryText.replace(/\s+/g, ' ').trim();
       const lines = pdf.splitTextToSize(summaryText, pw - 40);
       pdf.text(lines, 25, y);
       y += lines.length * 5 + 10;
     } else {
-      // Fallback summary
-      pdf.text('Link Summary (run Analyse for details)', 20, y);
+      pdf.text('Run "Analyse Path" for Link Summary', 20, y);
       y += 15;
     }
 
