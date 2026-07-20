@@ -1931,3 +1931,8 @@ async function generatePDFReport() {
     showLoading(false);
   }
 }
+
+// Missing MGRS fallback (add this)
+function toMGRS(latlng, precision = 5) {
+  return `${latlng.lat.toFixed(precision)}, ${latlng.lng.toFixed(precision)}`;
+}
